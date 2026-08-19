@@ -6,6 +6,8 @@ Landing page de Silbatazo orientada a reservas por WhatsApp para servicios de ar
 
 Abre `silbatazo_landing_disruptiva.html` en cualquier navegador moderno.
 
+El prototipo administrativo se encuentra en `admin.html`. Funciona directamente en el navegador y conserva los datos de prueba creados en el dispositivo mediante almacenamiento local.
+
 ## Identidad visual
 
 Paleta corporativa:
@@ -23,4 +25,3 @@ Los archivos de marca se guardarán en `assets/logos/`. Se recomienda incluir:
 - Logo principal horizontal, preferiblemente SVG o PNG transparente.
 - Isotipo o versión compacta para favicon y pantallas pequeñas.
 - Versión clara para fondos oscuros, si existe.
-
