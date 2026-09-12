@@ -28,6 +28,28 @@
     .float{position:fixed;z-index:20;right:18px;bottom:18px;background:var(--whatsapp);color:#07150b;border:2px solid var(--brand);border-radius:100px;padding:16px 20px;display:flex;align-items:center;gap:9px;font-weight:900;text-transform:uppercase;box-shadow:0 10px 40px rgba(0,0,0,.4);animation:pulse 2.3s infinite}.float svg{width:23px}@keyframes pulse{50%{box-shadow:0 10px 40px rgba(0,0,0,.4),0 0 0 10px rgba(0,208,138,0)}}
     @media(max-width:720px){nav{height:72px}.brand-logo{width:min(190px,46vw)}.mini-cta{padding:11px 13px;font-size:.7rem}.hero{padding-top:42px}.hero-mark{width:70vw;right:-28%;top:8%;opacity:.1}h1{font-size:clamp(4.2rem,23vw,7rem)}.proof{grid-template-columns:1fr;transform:rotate(-.6deg)}.proof div{border-right:0;border-bottom:2px solid var(--ink);padding:14px 8px}.cards,.steps{grid-template-columns:1fr}.card{min-height:210px}.step{min-height:auto}.allies{padding:56px 0}.ally-card{grid-template-columns:1fr;gap:22px;padding:26px 22px}.ally-link{width:100%}.float{left:12px;right:12px;bottom:12px;justify-content:center}.foot{align-items:flex-start;flex-direction:column}.secondary{display:none}section{padding:72px 0}.title{font-size:clamp(3.4rem,18vw,5.8rem)}}
     @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}.float{animation:none}.wa{transition:none}}
+
+    /* ---- Testimonios (estilo burbuja de WhatsApp) ---- */
+    .testi{background:var(--ink)}.testi .kicker{color:var(--brand)}.testi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:8px}
+    .bubble{background:#dcf8c6;border-radius:4px 16px 16px 16px;padding:16px 16px 12px;position:relative;box-shadow:6px 6px 0 rgba(0,0,0,.35);color:#0b2b12}
+    .bubble:before{content:"";position:absolute;left:-9px;top:0;width:0;height:0;border:10px solid transparent;border-right-color:#dcf8c6;border-left:0;border-top:0}
+    .bubble .who{display:flex;align-items:center;gap:9px;margin-bottom:10px}.bubble .av{width:34px;height:34px;border-radius:50%;background:var(--ink);color:var(--brand);display:grid;place-items:center;font:900 .95rem var(--display)}.bubble .name{font-weight:800;font-size:.9rem}.bubble .name small{display:block;font-weight:600;color:#3f6b46;font-size:.72rem}
+    .bubble img{width:100%;border-radius:8px;display:block;margin-bottom:6px;max-height:340px;object-fit:cover;cursor:zoom-in}
+    .bubble audio{width:100%;margin-bottom:6px;accent-color:#075e54}
+    .bubble .tag{display:inline-flex;align-items:center;gap:6px;font-size:.68rem;font-weight:800;text-transform:uppercase;color:#3f6b46}
+    .bubble .ticks{float:right;color:#53bdeb;font-size:.75rem}
+    .testi-empty,.gal-empty{color:var(--gray);font-size:.95rem;grid-column:1/-1;padding:18px;border:1px dashed var(--line);border-radius:10px}
+    @media(max-width:900px){.testi-grid{grid-template-columns:repeat(2,1fr)}}
+    @media(max-width:600px){.testi-grid{grid-template-columns:1fr}}
+
+    /* ---- Galería (fotos de árbitros y torneos, sincronizada desde Drive) ---- */
+    .gal{background:var(--paper);color:var(--ink)}
+    .gal-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 26px}.gal-tab{border:2px solid var(--ink);background:#fff;color:var(--ink);padding:10px 16px;font-weight:900;text-transform:uppercase;font-size:.78rem;cursor:pointer;border-radius:100px}.gal-tab.active{background:var(--ink);color:var(--brand)}
+    .gal-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.gal-grid figure{margin:0;position:relative;overflow:hidden;border:3px solid var(--ink);aspect-ratio:1/1;background:#dfe2e5}.gal-grid img{width:100%;height:100%;object-fit:cover;display:block;cursor:zoom-in;transition:.25s}.gal-grid img:hover{transform:scale(1.06)}
+    .gal-grid figcaption{position:absolute;left:0;right:0;bottom:0;padding:8px 10px;background:linear-gradient(0deg,rgba(0,0,0,.72),transparent);color:#fff;font-size:.7rem;font-weight:800;text-transform:uppercase;opacity:0;transition:.2s}.gal-grid figure:hover figcaption{opacity:1}
+    @media(max-width:900px){.gal-grid{grid-template-columns:repeat(3,1fr)}}
+    @media(max-width:600px){.gal-grid{grid-template-columns:repeat(2,1fr)}}
+    .lightbox{position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:60;display:none;place-items:center;padding:24px}.lightbox.open{display:grid}.lightbox img{max-width:min(94vw,900px);max-height:90vh;object-fit:contain;box-shadow:0 20px 60px rgba(0,0,0,.6)}.lightbox button{position:absolute;top:18px;right:22px;background:none;border:0;color:#fff;font-size:2.2rem;cursor:pointer;line-height:1}
   </style>
 </head>
 <body>
@@ -42,14 +64,57 @@
   </header>
   <section class="services" id="servicios"><div class="wrap"><span class="kicker">Lo que pitamos</span><h2 class="title">Hay partido<br>Hay Silbatazo</h2><div class="cards"><article class="card" data-n="01"><span>Para parches y equipos</span><h3>Partidos amistosos</h3><p>Disfruten el fútbol sin discusiones. Nosotros ponemos las reglas claras desde el primer minuto.</p></article><article class="card" data-n="02"><span>Una fecha o campeonato</span><h3>Torneos</h3><p>Árbitros para jornadas, fases y finales. Coordinación confiable para que el torneo no se detenga.</p></article><article class="card" data-n="03"><span>Empresas y comunidades</span><h3>Eventos deportivos</h3><p>Arbitraje para integraciones, campeonatos empresariales y actividades comunitarias.</p></article><article class="card" data-n="04"><span>Infantil, juvenil y amateur</span><h3>Todos juegan</h3><p>Autoridad con respeto y criterio para cuidar el ambiente dentro y fuera de la cancha.</p></article></div></div></section>
   <section class="how"><div class="wrap"><span class="kicker">Fácil y sin vueltas</span><h2 class="title">Del WhatsApp<br>a la cancha</h2><div class="steps"><div class="step"><b>01</b><h3>Escríbenos</h3><p>Cuéntanos qué partido vas a jugar.</p></div><div class="step"><b>02</b><h3>Pasa los datos</h3><p>Fecha, hora, lugar y tipo de encuentro.</p></div><div class="step"><b>03</b><h3>Confirmamos</h3><p>Revisamos disponibilidad y coordinamos tu árbitro.</p></div><div class="step"><b>04</b><h3>¡A jugar!</h3><p>Tú disfrutas. Silbatazo se encarga del orden.</p></div></div></div></section>
+  <section class="testi" id="testimonios"><div class="wrap"><span class="kicker">Lo que dicen por WhatsApp</span><h2 class="title" style="color:#fff">Testimonios reales</h2><div class="testi-grid" id="testiGrid"><p class="testi-empty">Cargando testimonios…</p></div></div></section>
+  <section class="gal" id="galeria"><div class="wrap"><span class="kicker">Así se ve un Silbatazo</span><h2 class="title">Galería</h2><div class="gal-tabs" id="galTabs"><button class="gal-tab active" data-cat="todas">Todas</button><button class="gal-tab" data-cat="torneos">Torneos</button><button class="gal-tab" data-cat="arbitros">Árbitros</button><button class="gal-tab" data-cat="otras">Otras</button></div><div class="gal-grid" id="galGrid"><p class="gal-empty">Cargando galería…</p></div></div></section>
   <section class="allies" aria-labelledby="allies-title"><div class="wrap"><article class="ally-card"><div><span class="ally-label">Nuestro aliado</span><div class="ally-logo" aria-label="Fulbito">FULBIT<em>O</em></div></div><div class="ally-copy"><h2 id="allies-title">¿Te falta partido?</h2><p>En Fulbito encuentras jugadores, equipos y partidos cerca de ti. Completa tu equipo, inscríbete y sal a jugar en Medellín.</p></div><a class="ally-link" href="https://www.fulbito.com.co/app/explorar" target="_blank" rel="noopener noreferrer" aria-label="Explorar partidos en Fulbito, abre una pestaña nueva">Explorar partidos →</a></article></div></section>
   <section class="close"><div class="wrap"><span class="kicker">No dejes tu partido al azar</span><h2 class="title">Reserva al árbitro que tu partido merece</h2><div class="price">DESDE $50.000</div><p>Cuéntanos cuándo y dónde juegas. Te respondemos por WhatsApp.</p><a class="wa" data-wa href="#">Quiero reservar mi árbitro</a><div class="coverage">Medellín · Itagüí · Envigado · Sabaneta · Área Metropolitana</div></div></section>
   <footer><div class="wrap foot"><img class="brand-logo" src="assets/logos/logo-completo.png" alt="Silbatazo"><div><strong>Tus árbitros de confianza</strong><br>Fútbol con orden. Partidos con respeto.<br><a href="admin.html" style="display:inline-block;margin-top:12px;color:#8c8f95;font-size:.78rem;text-decoration:underline">Acceso administrativo</a></div></div></footer>
   <a class="float" data-wa href="#" aria-label="Reservar árbitro por WhatsApp"><img src="assets/logos/whatsapp.png" alt="">Reservar por WhatsApp</a>
+  <div class="lightbox" id="lightbox"><button id="lightboxClose" aria-label="Cerrar">×</button><img id="lightboxImg" src="" alt=""></div>
   <script>
     const whatsappNumber = '573159888384';
     const message = 'Hola Silbatazo, quiero reservar un árbitro. Mi partido es el [fecha] a las [hora] en [lugar].';
     document.querySelectorAll('[data-wa]').forEach(link => { link.href = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(message)}`; link.target = '_blank'; link.rel = 'noopener noreferrer'; });
+
+    // ---- Lightbox ----
+    const lightbox = document.getElementById('lightbox'), lightboxImg = document.getElementById('lightboxImg');
+    function openLightbox(src){ lightboxImg.src = src; lightbox.classList.add('open'); }
+    document.getElementById('lightboxClose').onclick = () => lightbox.classList.remove('open');
+    lightbox.onclick = (e) => { if (e.target === lightbox) lightbox.classList.remove('open'); };
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') lightbox.classList.remove('open'); });
+
+    // ---- Testimonios (desde /api/testimonios, que lee la carpeta Testimonios de Drive) ----
+    (async () => {
+      const grid = document.getElementById('testiGrid');
+      try {
+        const r = await fetch('/api/testimonios');
+        const data = await r.json();
+        if (!data.ready) { grid.innerHTML = '<p class="testi-empty">Muy pronto vas a ver aquí lo que nuestros clientes dicen por WhatsApp.</p>'; return; }
+        const cards = [];
+        (data.texto || []).forEach(f => cards.push(`<div class="bubble"><div class="who"><span class="av">S</span><div class="name">Cliente Silbatazo<small>Vía WhatsApp</small></div></div><img loading="lazy" src="/api/media?id=${f.id}" alt="Testimonio de un cliente" onclick="openLightbox(this.src)"><span class="tag">💬 Mensaje real</span><span class="ticks">✓✓</span></div>`));
+        (data.audio || []).forEach(f => cards.push(`<div class="bubble"><div class="who"><span class="av">S</span><div class="name">Cliente Silbatazo<small>Vía WhatsApp</small></div></div><audio controls preload="none" src="/api/media?id=${f.id}"></audio><span class="tag">🎙️ Nota de voz</span><span class="ticks">✓✓</span></div>`));
+        grid.innerHTML = cards.length ? cards.join('') : '<p class="testi-empty">Muy pronto vas a ver aquí lo que nuestros clientes dicen por WhatsApp.</p>';
+      } catch (e) { grid.innerHTML = '<p class="testi-empty">No pudimos cargar los testimonios en este momento.</p>'; }
+    })();
+
+    // ---- Galería (desde /api/gallery, que lee la carpeta Fotos de Drive) ----
+    (async () => {
+      const grid = document.getElementById('galGrid');
+      let allItems = [];
+      try {
+        const r = await fetch('/api/gallery');
+        const data = await r.json();
+        if (!data.ready) { grid.innerHTML = '<p class="gal-empty">Muy pronto vas a ver aquí fotos reales de árbitros y torneos.</p>'; return; }
+        (data.categories || []).forEach(g => g.items.forEach(it => allItems.push({ ...it, folder: g.folder, category: g.category })));
+        if (!allItems.length) { grid.innerHTML = '<p class="gal-empty">Muy pronto vas a ver aquí fotos reales de árbitros y torneos.</p>'; return; }
+        function render(cat){
+          const list = cat === 'todas' ? allItems : allItems.filter(i => i.category === cat);
+          grid.innerHTML = list.slice(0, 60).map(i => `<figure><img loading="lazy" src="/api/media?id=${i.id}" alt="${i.folder}" onclick="openLightbox(this.src)"><figcaption>${i.folder}</figcaption></figure>`).join('') || '<p class="gal-empty">No hay fotos en esta categoría todavía.</p>';
+        }
+        render('todas');
+        document.querySelectorAll('.gal-tab').forEach(btn => btn.onclick = () => { document.querySelectorAll('.gal-tab').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); render(btn.dataset.cat); });
+      } catch (e) { grid.innerHTML = '<p class="gal-empty">No pudimos cargar la galería en este momento.</p>'; }
+    })();
   </script>
 </body>
 </html>
