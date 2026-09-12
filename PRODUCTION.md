@@ -68,21 +68,8 @@ Pasos (los hace quien tenga acceso a Google Cloud y a Vercel — Claude no puede
    - Aplicar a Production y Preview, y volver a desplegar.
 6. Verificar abriendo `/api/gallery` y `/api/testimonios` en el navegador — deben devolver JSON con `"ready": true` y las fotos/testimonios encontrados.
 
-Estructura esperada dentro de `Fotos` (cada subcarpeta se agrupa sola en la web por su nombre):
+Dentro de `Fotos`, organiza las subcarpetas como prefieras (por torneo, por árbitro, como sea más cómodo para el equipo) — cada subcarpeta directa se agrupa sola en la galería usando su propio nombre como etiqueta. Solo fotos ahí adentro; nada de hojas de cálculo, contratos ni información de contabilidad, para que no termine expuesto por accidente en la web pública.
 
-```
-Fotos/
-  Arbitros/
-  Fotos Profes/ (dentro de Listas Silbatazo)
-  Fotos Varias de todo/
-  Torneo Alegria/
-  Torneo San felix/
-  Torneo Altavista/
-  Torneo Cordeca/
-  Torneo Villaterra/
-  TORNEO - Primavera/
-```
-
-Y dentro de `Testimonios`, dos subcarpetas fijas: `Texto` (capturas de pantalla de WhatsApp) y `Audio` (notas de voz, cualquier formato de audio común como `.ogg`, `.mp3`, `.m4a`).
+Dentro de `Testimonios`, dos subcarpetas fijas: `Texto` (capturas de pantalla de WhatsApp) y `Audio` (notas de voz, cualquier formato de audio común como `.ogg`, `.mp3`, `.m4a`).
 
 No hace falta redesplegar cada vez que se sube una foto o un testimonio nuevo: la web los lee en vivo (con una caché corta de 5 minutos) directamente de Drive.
