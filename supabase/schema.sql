@@ -181,6 +181,27 @@ begin
 end $$;
 create trigger cards_set_fee before insert on public.cards for each row execute function public.set_card_fee();
 
+-- Un veedor solo puede marcar una tarjeta como pagada (paid/paid_at). La
+-- política RLS de update para veedores solo filtra por partido asignado,
+-- no por columna, así que sin esto un veedor podría, además de marcar el
+-- pago, cambiarle el monto, el nombre del jugador o el tipo de tarjeta a
+-- cualquier tarjeta de sus propios partidos. Este trigger deja esas
+-- columnas intactas cuando quien actualiza no es admin.
+create or replace function public.cards_restrict_veedor_update() returns trigger language plpgsql as $$
+begin
+  if not public.is_admin() then
+    new.match_id := old.match_id;
+    new.team_side := old.team_side;
+    new.player_name := old.player_name;
+    new.card_type := old.card_type;
+    new.fee := old.fee;
+    new.recorded_by := old.recorded_by;
+    new.created_at := old.created_at;
+  end if;
+  return new;
+end $$;
+create trigger cards_restrict_veedor_update before update on public.cards for each row execute function public.cards_restrict_veedor_update();
+
 create trigger observers_updated before update on public.observers for each row execute function public.set_updated_at();
 create trigger match_reports_updated before update on public.match_reports for each row execute function public.set_updated_at();
 

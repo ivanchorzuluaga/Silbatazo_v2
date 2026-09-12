@@ -103,6 +103,7 @@
 <script src="assets/js/supa.js"></script>
 <script>
 const money = n => new Intl.NumberFormat('es-CO',{style:'currency',currency:'COP',maximumFractionDigits:0}).format(n||0);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function toastMsg(msg){toast.textContent=msg;toast.classList.add('show');setTimeout(()=>toast.classList.remove('show'),2600)}
 function todayISO(){return new Date().toISOString().slice(0,10)}
 
@@ -136,8 +137,8 @@ function renderList(){
     const done = m.report_submitted_at;
     return `<div class="mcard" data-id="${m.match_id}">
       <div class="top"><span class="time">${fmtTime(m.match_time)}</span><span class="date">${fmtDate(m.match_date)}</span></div>
-      <h3>${m.match_name}</h3>
-      <div class="meta">📍 ${m.place||''}${m.match_type?(' · '+m.match_type):''}</div>
+      <h3>${esc(m.match_name)}</h3>
+      <div class="meta">📍 ${esc(m.place)}${m.match_type?(' · '+esc(m.match_type)):''}</div>
       <div class="foot"><span class="pill ${done?'done':'pending'}">${done?('Marcador: '+m.home_score+' - '+m.away_score):'Falta registrar'}</span><span class="fee">${money(m.agreed_value)}</span></div>
     </div>`;
   };
@@ -158,12 +159,12 @@ async function openMatch(matchId){
   viewMatch.innerHTML = `
     <button class="backbtn" id="backBtn">← Mis partidos</button>
     <div class="box">
-      <h2>${m.match_name}</h2>
-      <p class="sub">${fmtDate(m.match_date)} · ${fmtTime(m.match_time)} · 📍 ${m.place||''} — te toca reunir <b>${money(m.agreed_value)}</b></p>
+      <h2>${esc(m.match_name)}</h2>
+      <p class="sub">${fmtDate(m.match_date)} · ${fmtTime(m.match_time)} · 📍 ${esc(m.place)} — te toca reunir <b>${money(m.agreed_value)}</b></p>
       <div class="score-row">
-        <div class="team"><b>${m.team_local||'Local'}</b><input type="number" min="0" id="homeScore" value="${m.home_score ?? ''}"></div>
+        <div class="team"><b>${esc(m.team_local)||'Local'}</b><input type="number" min="0" id="homeScore" value="${m.home_score ?? ''}"></div>
         <div class="vs">–</div>
-        <div class="team"><b>${m.team_visitor||'Visitante'}</b><input type="number" min="0" id="awayScore" value="${m.away_score ?? ''}"></div>
+        <div class="team"><b>${esc(m.team_visitor)||'Visitante'}</b><input type="number" min="0" id="awayScore" value="${m.away_score ?? ''}"></div>
       </div>
       <button class="save" id="saveScore">Guardar marcador</button>
     </div>
@@ -174,8 +175,8 @@ async function openMatch(matchId){
       <div class="addcard">
         <div class="field"><label>Equipo</label>
           <div class="seg">
-            <button type="button" class="on local" id="segLocal">${m.team_local||'Local'}</button>
-            <button type="button" class="visitante" id="segVisitante">${m.team_visitor||'Visitante'}</button>
+            <button type="button" class="on local" id="segLocal">${esc(m.team_local)||'Local'}</button>
+            <button type="button" class="visitante" id="segVisitante">${esc(m.team_visitor)||'Visitante'}</button>
           </div>
         </div>
         <div class="field"><label>Jugador (nombre y/o número)</label><input id="playerName" placeholder="Ej. Juan Pérez #7"></div>
@@ -219,7 +220,7 @@ async function loadCards(matchId){
   cardsList.innerHTML = data.length ? data.map(c => `
     <div class="cardrow" data-id="${c.id}">
       <div class="badge ${c.card_type}"></div>
-      <div class="info"><b>${c.player_name}</b><small>${c.team_side==='local'?'Local':'Visitante'} · ${money(c.fee)}</small></div>
+      <div class="info"><b>${esc(c.player_name)}</b><small>${c.team_side==='local'?'Local':'Visitante'} · ${money(c.fee)}</small></div>
       <button class="${c.paid?'paid':'pend'}" data-paid="${c.paid}">${c.paid?'Pagó ✓':'Pendiente'}</button>
     </div>`).join('') : '<p class="sub">Todavía no hay tarjetas en este partido.</p>';
   cardsList.querySelectorAll('button[data-paid]').forEach(btn => {
