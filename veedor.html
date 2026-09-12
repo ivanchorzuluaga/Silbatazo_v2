@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#06090f">
+  <title>Silbatazo · Veedor</title>
+  <link rel="icon" type="image/png" href="assets/logos/silbato.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,700;0,800;0,900&family=Barlow:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root{--black:#000;--ink:#06090f;--panel:#10151d;--gray:#8c8f95;--muted:#aeb4bf;--white:#f7f8fa;--brand:#00d08a;--yellow:#ffbe2c;--red:#ff615b;--line:rgba(140,143,149,.2);--display:"Barlow Condensed",Impact,sans-serif;--body:"Barlow",Arial,sans-serif}
+    *{box-sizing:border-box}html{scroll-behavior:smooth}
+    body{margin:0;background:#eef0f2;color:var(--ink);font-family:var(--body);font-size:17px}
+    button,input,select,textarea{font:inherit}button,a{touch-action:manipulation}
+    header.top{background:var(--ink);color:#fff;padding:18px 20px;position:sticky;top:0;z-index:10}
+    header.top .row{display:flex;align-items:center;justify-content:space-between;gap:10px}
+    header.top img{height:34px}
+    header.top .who{text-align:right}
+    header.top .who b{display:block;font-size:.95rem}
+    header.top .who button{border:0;background:none;color:var(--muted);font-size:.8rem;text-decoration:underline;padding:6px 0;cursor:pointer}
+    .purse{margin-top:14px;background:var(--panel);border-radius:12px;padding:16px 18px;display:flex;justify-content:space-between;align-items:center}
+    .purse small{color:var(--muted);text-transform:uppercase;font-weight:800;font-size:.72rem;display:block;margin-bottom:4px}
+    .purse strong{font:900 1.9rem/1 var(--display);color:var(--yellow)}
+    main{padding:18px 16px 100px;max-width:640px;margin:0 auto}
+    .sec-title{font:900 1.2rem/1 var(--display);text-transform:uppercase;color:#4c545e;margin:22px 2px 10px}
+    .mcard{background:#fff;border:1px solid #dfe2e5;border-radius:14px;padding:18px;margin-bottom:12px;cursor:pointer}
+    .mcard .top{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
+    .mcard .time{font:900 1.5rem/1 var(--display)}
+    .mcard .date{color:#8b929b;font-size:.78rem;font-weight:700;text-transform:uppercase}
+    .mcard h3{margin:8px 0 4px;font-size:1.15rem}
+    .mcard .meta{color:#66707b;font-size:.88rem}
+    .mcard .foot{margin-top:12px;display:flex;justify-content:space-between;align-items:center}
+    .pill{padding:6px 10px;border-radius:100px;font-weight:900;font-size:.72rem;text-transform:uppercase}
+    .pill.pending{background:#fff0bf;color:#825d00}
+    .pill.done{background:#d7f8e8;color:#007148}
+    .mcard .fee{font:900 1.2rem var(--display);color:#007148}
+    .empty{padding:40px 20px;text-align:center;color:#737b86}
+    .backbtn{border:0;background:none;color:#007d56;font-weight:900;font-size:1rem;padding:12px 2px;min-height:44px;cursor:pointer}
+    .box{background:#fff;border:1px solid #dfe2e5;border-radius:14px;padding:20px;margin-bottom:16px}
+    .box h2{margin:0 0 4px;font:900 1.5rem/1 var(--display);text-transform:uppercase}
+    .box .sub{color:#737b86;font-size:.88rem;margin:0 0 16px}
+    .score-row{display:flex;align-items:center;justify-content:center;gap:18px;margin:10px 0 18px}
+    .score-row .team{flex:1;text-align:center}
+    .score-row .team b{display:block;font-size:.95rem;margin-bottom:8px}
+    .score-row input{width:100%;max-width:110px;text-align:center;font:900 2.4rem var(--display);border:2px solid #ccd1d7;border-radius:12px;padding:10px 0;background:#fff}
+    .score-row .vs{font:900 1.4rem var(--display);color:#aeb4bf;padding-top:26px}
+    .save{width:100%;border:0;border-radius:10px;padding:17px;min-height:54px;background:var(--brand);color:var(--ink);font-weight:900;font-size:1.05rem;cursor:pointer}
+    .save[disabled]{opacity:.5}
+    .ghost{width:100%;border:1px solid #ccd1d7;background:#fff;border-radius:10px;padding:15px;min-height:50px;font-weight:900;font-size:1rem;cursor:pointer;margin-top:10px}
+    .cardrow{display:flex;align-items:center;gap:12px;padding:14px 0;border-bottom:1px solid #eceef0}
+    .cardrow:last-child{border:0}
+    .badge{width:26px;height:34px;border-radius:4px;flex:none}
+    .badge.yellow{background:var(--yellow)}
+    .badge.red{background:var(--red)}
+    .cardrow .info{flex:1;min-width:0}
+    .cardrow .info b{display:block}
+    .cardrow .info small{color:#8b929b}
+    .cardrow button{border:0;border-radius:8px;padding:10px 14px;min-height:40px;font-weight:900;font-size:.85rem;cursor:pointer;white-space:nowrap}
+    .cardrow button.pend{background:#ffe0df;color:#a12520}
+    .cardrow button.paid{background:#d7f8e8;color:#007148}
+    .addcard{margin-top:6px}
+    .field{display:grid;gap:7px;margin-bottom:14px}
+    .field label{font-size:.82rem;font-weight:900;text-transform:uppercase;color:#606a75}
+    .field input,.field select{width:100%;border:1px solid #ccd1d7;border-radius:9px;padding:14px;min-height:50px;font-size:1.05rem;background:#fff}
+    .seg{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .seg button{border:2px solid #ccd1d7;background:#fff;border-radius:10px;padding:14px;min-height:52px;font-weight:900;cursor:pointer;font-size:1rem}
+    .seg button.on.local{border-color:var(--ink);background:var(--ink);color:#fff}
+    .seg button.on.visitante{border-color:var(--ink);background:var(--ink);color:#fff}
+    .cardtype{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .cardtype button{border:2px solid #ccd1d7;background:#fff;border-radius:10px;padding:16px;min-height:56px;font-weight:900;cursor:pointer;font-size:1rem;display:flex;align-items:center;justify-content:center;gap:8px}
+    .cardtype button .sq{width:18px;height:24px;border-radius:3px}
+    .cardtype button.yellow .sq{background:var(--yellow)}
+    .cardtype button.red .sq{background:var(--red)}
+    .cardtype button.on.yellow{border-color:var(--yellow);background:#fff8e6}
+    .cardtype button.on.red{border-color:var(--red);background:#fff0ef}
+    .toast{position:fixed;left:16px;right:16px;bottom:16px;background:var(--ink);color:#fff;padding:16px 18px;border-left:5px solid var(--brand);border-radius:10px;z-index:50;transform:translateY(150px);transition:.25s;max-width:608px;margin:0 auto}
+    .toast.show{transform:none}
+    .view{display:none}.view.active{display:block}
+  </style>
+</head>
+<body>
+<header class="top">
+  <div class="row">
+    <img src="assets/logos/logo-completo.png" alt="Silbatazo">
+    <div class="who"><b id="whoName">Veedor</b><button id="logoutBtn" type="button">Cerrar sesión</button></div>
+  </div>
+  <div class="purse"><div><small>Hoy debes reunir</small><strong id="purseToday">$0</strong></div><div style="text-align:right"><small>Partidos hoy</small><strong id="matchesToday" style="color:#fff;font-size:1.4rem">0</strong></div></div>
+</header>
+<main id="app">
+  <div class="view active" id="viewList">
+    <div class="sec-title">Hoy</div>
+    <div id="listToday"></div>
+    <div class="sec-title">Próximos</div>
+    <div id="listUpcoming"></div>
+  </div>
+  <div class="view" id="viewMatch"></div>
+</main>
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="assets/js/supa.js"></script>
+<script>
+const money = n => new Intl.NumberFormat('es-CO',{style:'currency',currency:'COP',maximumFractionDigits:0}).format(n||0);
+function toastMsg(msg){toast.textContent=msg;toast.classList.add('show');setTimeout(()=>toast.classList.remove('show'),2600)}
+function todayISO(){return new Date().toISOString().slice(0,10)}
+
+let client, me, observerId, matches = [];
+let currentOpenMatchId = null;
+
+function fmtDate(d){
+  const [y,m,day]=d.split('-');
+  const dt=new Date(+y,+m-1,+day);
+  return new Intl.DateTimeFormat('es-CO',{weekday:'short',day:'numeric',month:'short'}).format(dt);
+}
+function fmtTime(t){ return t ? t.slice(0,5) : '' }
+
+async function loadMatches(){
+  const { data, error } = await client.rpc('my_assigned_matches');
+  if (error) { toastMsg('No pudimos cargar tus partidos.'); return; }
+  matches = data || [];
+  renderList();
+}
+
+function renderList(){
+  const today = todayISO();
+  const list = matches.slice().sort((a,b)=>(a.match_date+a.match_time).localeCompare(b.match_date+b.match_time));
+  const isToday = m => m.match_date === today;
+  const todays = list.filter(isToday);
+  const upcoming = list.filter(m => !isToday(m));
+  const purse = todays.reduce((a,m)=>a+Number(m.agreed_value||0),0);
+  purseToday.textContent = money(purse);
+  matchesToday.textContent = todays.length;
+  const card = m => {
+    const done = m.report_submitted_at;
+    return `<div class="mcard" data-id="${m.match_id}">
+      <div class="top"><span class="time">${fmtTime(m.match_time)}</span><span class="date">${fmtDate(m.match_date)}</span></div>
+      <h3>${m.match_name}</h3>
+      <div class="meta">📍 ${m.place||''}${m.match_type?(' · '+m.match_type):''}</div>
+      <div class="foot"><span class="pill ${done?'done':'pending'}">${done?('Marcador: '+m.home_score+' - '+m.away_score):'Falta registrar'}</span><span class="fee">${money(m.agreed_value)}</span></div>
+    </div>`;
+  };
+  listToday.innerHTML = todays.map(card).join('') || '<div class="empty">No tienes partidos asignados hoy.</div>';
+  listUpcoming.innerHTML = upcoming.map(card).join('') || '<div class="empty">No hay más partidos próximos asignados.</div>';
+  document.querySelectorAll('.mcard').forEach(el => el.onclick = () => openMatch(el.dataset.id));
+}
+
+let cardTeamSide = 'local', cardType = null;
+
+async function openMatch(matchId){
+  const m = matches.find(x => x.match_id === matchId);
+  if (!m) return;
+  currentOpenMatchId = matchId;
+  viewList.classList.remove('active');
+  viewMatch.classList.add('active');
+  cardTeamSide = 'local'; cardType = null;
+  viewMatch.innerHTML = `
+    <button class="backbtn" id="backBtn">← Mis partidos</button>
+    <div class="box">
+      <h2>${m.match_name}</h2>
+      <p class="sub">${fmtDate(m.match_date)} · ${fmtTime(m.match_time)} · 📍 ${m.place||''} — te toca reunir <b>${money(m.agreed_value)}</b></p>
+      <div class="score-row">
+        <div class="team"><b>${m.team_local||'Local'}</b><input type="number" min="0" id="homeScore" value="${m.home_score ?? ''}"></div>
+        <div class="vs">–</div>
+        <div class="team"><b>${m.team_visitor||'Visitante'}</b><input type="number" min="0" id="awayScore" value="${m.away_score ?? ''}"></div>
+      </div>
+      <button class="save" id="saveScore">Guardar marcador</button>
+    </div>
+    <div class="box">
+      <h2>Tarjetas</h2>
+      <p class="sub">Amarilla = $5.000 · Roja = $10.000. El jugador queda pendiente de pago hasta que marques "Pagó".</p>
+      <div id="cardsList"></div>
+      <div class="addcard">
+        <div class="field"><label>Equipo</label>
+          <div class="seg">
+            <button type="button" class="on local" id="segLocal">${m.team_local||'Local'}</button>
+            <button type="button" class="visitante" id="segVisitante">${m.team_visitor||'Visitante'}</button>
+          </div>
+        </div>
+        <div class="field"><label>Jugador (nombre y/o número)</label><input id="playerName" placeholder="Ej. Juan Pérez #7"></div>
+        <div class="field"><label>Tarjeta</label>
+          <div class="cardtype">
+            <button type="button" class="yellow" id="btnYellow"><span class="sq"></span> Amarilla</button>
+            <button type="button" class="red" id="btnRed"><span class="sq"></span> Roja</button>
+          </div>
+        </div>
+        <button class="ghost" id="addCardBtn">+ Registrar tarjeta</button>
+      </div>
+    </div>
+  `;
+  backBtn.onclick = () => { currentOpenMatchId = null; viewMatch.classList.remove('active'); viewList.classList.add('active'); viewMatch.innerHTML=''; loadMatches(); };
+  saveScore.onclick = () => saveMatchScore(m);
+  segLocal.onclick = () => { cardTeamSide='local'; segLocal.classList.add('on'); segVisitante.classList.remove('on'); };
+  segVisitante.onclick = () => { cardTeamSide='visitante'; segVisitante.classList.add('on'); segLocal.classList.remove('on'); };
+  btnYellow.onclick = () => { cardType='yellow'; btnYellow.classList.add('on'); btnRed.classList.remove('on'); };
+  btnRed.onclick = () => { cardType='red'; btnRed.classList.add('on'); btnYellow.classList.remove('on'); };
+  addCardBtn.onclick = () => addCard(m);
+  await loadCards(m.match_id);
+}
+
+async function saveMatchScore(m){
+  const home = homeScore.value === '' ? null : +homeScore.value;
+  const away = awayScore.value === '' ? null : +awayScore.value;
+  saveScore.disabled = true; saveScore.textContent = 'Guardando…';
+  const { error } = await client.from('match_reports').upsert({
+    match_id: m.match_id, home_score: home, away_score: away,
+    submitted_by: observerId, submitted_at: new Date().toISOString(),
+  });
+  saveScore.disabled = false; saveScore.textContent = 'Guardar marcador';
+  if (error) { toastMsg('No se pudo guardar el marcador.'); return; }
+  m.home_score = home; m.away_score = away; m.report_submitted_at = new Date().toISOString();
+  toastMsg('Marcador guardado.');
+}
+
+async function loadCards(matchId){
+  const { data, error } = await client.from('cards').select('*').eq('match_id', matchId).order('created_at');
+  if (error) { cardsList.innerHTML = '<p class="sub">No pudimos cargar las tarjetas.</p>'; return; }
+  cardsList.innerHTML = data.length ? data.map(c => `
+    <div class="cardrow" data-id="${c.id}">
+      <div class="badge ${c.card_type}"></div>
+      <div class="info"><b>${c.player_name}</b><small>${c.team_side==='local'?'Local':'Visitante'} · ${money(c.fee)}</small></div>
+      <button class="${c.paid?'paid':'pend'}" data-paid="${c.paid}">${c.paid?'Pagó ✓':'Pendiente'}</button>
+    </div>`).join('') : '<p class="sub">Todavía no hay tarjetas en este partido.</p>';
+  cardsList.querySelectorAll('button[data-paid]').forEach(btn => {
+    btn.onclick = () => togglePaid(btn.closest('.cardrow').dataset.id, btn.dataset.paid === 'true');
+  });
+}
+
+async function togglePaid(cardId, isPaid){
+  if (isPaid) return; // ya está pagada, no hay nada que alternar de vuelta desde aquí
+  const { error } = await client.from('cards').update({ paid: true, paid_at: new Date().toISOString() }).eq('id', cardId);
+  if (error) { toastMsg('No se pudo marcar el pago.'); return; }
+  toastMsg('Tarjeta marcada como pagada.');
+  if (currentOpenMatchId) await loadCards(currentOpenMatchId);
+}
+
+async function addCard(m){
+  const name = playerName.value.trim();
+  if (!name) { toastMsg('Escribe el nombre del jugador.'); return; }
+  if (!cardType) { toastMsg('Elige si es amarilla o roja.'); return; }
+  addCardBtn.disabled = true; addCardBtn.textContent = 'Guardando…';
+  const { error } = await client.from('cards').insert({
+    match_id: m.match_id, team_side: cardTeamSide, player_name: name,
+    card_type: cardType, recorded_by: observerId,
+  });
+  addCardBtn.disabled = false; addCardBtn.textContent = '+ Registrar tarjeta';
+  if (error) { toastMsg('No se pudo registrar la tarjeta.'); return; }
+  playerName.value=''; cardType=null; btnYellow.classList.remove('on'); btnRed.classList.remove('on');
+  toastMsg('Tarjeta registrada.');
+  await loadCards(m.match_id);
+}
+
+logoutBtn.onclick = async () => { await SilbatazoAuth.signOut(); window.location.reload(); };
+
+(async function init(){
+  const session = await SilbatazoAuth.requireRole('veedor', { title: 'Acceso de veedor', logoSrc: 'assets/logos/silbato.png' });
+  client = session.client;
+  me = session.profile;
+  whoName.textContent = me.full_name || 'Veedor';
+  const { data: obs } = await client.from('observers').select('id').eq('profile_id', me.id).single();
+  observerId = obs ? obs.id : null;
+  await loadMatches();
+})();
+</script>
+</body>
+</html>

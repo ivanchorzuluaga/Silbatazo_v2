@@ -26,10 +26,13 @@ values ('UUID-DEL-USUARIO', 'Nombre del administrador');
 
 1. Importar o actualizar el proyecto usando el repositorio de GitHub.
 2. En **Settings → Environment Variables**, crear:
-   - `VITE_SUPABASE_URL`
-   - `VITE_SUPABASE_ANON_KEY`
+   - `SUPABASE_URL`
+   - `SUPABASE_ANON_KEY`
+   - `SUPABASE_SERVICE_ROLE_KEY` (Settings → API → "service_role" en Supabase — **nunca** se usa en el navegador; solo la leen las funciones serverless de `/api`, como `create-veedor.js`)
 3. Aplicarlas a Production y Preview.
 4. Hacer un nuevo despliegue; los cambios de variables no afectan despliegues anteriores.
+
+Nota: este sitio no tiene paso de build (no Vite), así que estas variables no se inyectan en el HTML directamente. `admin.html` y `veedor.html` piden la URL y la anon key al cargar a través de `/api/config` (una función serverless que simplemente las lee del entorno) — por eso el prefijo `VITE_` de versiones anteriores de este archivo ya no aplica.
 
 ## 3. Antes de usar datos reales
 
@@ -48,7 +51,7 @@ values ('UUID-DEL-USUARIO', 'Nombre del administrador');
 
 ## Pendiente de credenciales
 
-La interfaz visual está preparada y el esquema productivo está creado. Para reemplazar definitivamente el almacenamiento local por Supabase se necesitan la URL pública y la clave `anon` del proyecto. Estas claves se configuran en Vercel; nunca se debe usar la clave `service_role` en el navegador.
+`admin.html` y `veedor.html` ya están escritos para hablar directamente con Supabase (ya no usan almacenamiento local del navegador). Para que funcionen en vivo solo falta que exista el proyecto de Supabase real y que sus llaves estén puestas en Vercel (paso 1 y 2 de arriba) — mientras eso no esté, ambas páginas muestran una pantalla de "sin conexión con el servidor" en vez de fallar en silencio.
 
 ## 5. Galería y testimonios automáticos desde Google Drive
 
@@ -73,3 +76,26 @@ Dentro de `Fotos`, organiza las subcarpetas como prefieras (por torneo, por árb
 Dentro de `Testimonios`, dos subcarpetas fijas: `Texto` (capturas de pantalla de WhatsApp) y `Audio` (notas de voz, cualquier formato de audio común como `.ogg`, `.mp3`, `.m4a`).
 
 No hace falta redesplegar cada vez que se sube una foto o un testimonio nuevo: la web los lee en vivo (con una caché corta de 5 minutos) directamente de Drive.
+
+## 6. Veedores: marcador, tarjetas y multas
+
+Hay una segunda pantalla, `veedor.html`, con acceso completamente aparte del panel administrativo: cada veedor entra con su propio correo y contraseña y **solo ve los partidos que un administrador le asignó** (nunca los demás partidos, ni la plata del negocio). Esto lo hace la base de datos misma (Row Level Security en Supabase), no la aplicación — así que es seguro aunque alguien intente forzarlo desde el navegador.
+
+Qué puede hacer un veedor desde su celular, por cada partido asignado:
+- Ver cuánta plata debe reunir ese día (según lo acordado por partido).
+- Anotar el marcador final.
+- Registrar las tarjetas: a quién, de qué equipo, amarilla o roja. La multa se calcula sola ($5.000 amarilla, $10.000 roja) — no hay que escribirla.
+- Marcar una tarjeta como pagada cuando el jugador cancela la multa.
+
+Qué ve el administrador (pestaña **Veedores** del panel):
+- La lista de veedores, con cuántos partidos tiene cada uno.
+- Un reporte de **novedades pendientes de pago**: todas las tarjetas de todos los partidos que todavía no se han pagado, con quién, de qué partido y cuánto — para saber, antes de la siguiente fecha, quién tiene que pagar para poder jugar.
+- Puede marcar cualquier tarjeta como pagada también (por si el jugador le paga a él directamente en vez de al veedor).
+
+Cómo crear un veedor nuevo (ya no hace falta tocar Supabase a mano):
+1. En el panel administrativo, ir a **Veedores → + Agregar veedor**.
+2. Escribir su nombre, teléfono y un correo (puede ser cualquiera al que tenga acceso, no necesita ser Gmail).
+3. El sistema crea el usuario y muestra una contraseña generada una sola vez — cópiala y compártela por WhatsApp junto con el enlace a `veedor.html`.
+4. El veedor entra a `veedor.html` con ese correo y esa contraseña.
+
+Para que un veedor vea un partido, hay que asignárselo desde el formulario **Nuevo partido** (sección "Veedor"), igual que se asigna el árbitro.
