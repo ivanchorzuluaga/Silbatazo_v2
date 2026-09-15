@@ -81,8 +81,18 @@ window.SilbatazoAuth = (function () {
     document.body.appendChild(overlay);
   }
 
+  // Los veedores entran con un usuario (no todos tienen correo), no con
+  // email — por dentro sigue siendo un login de Supabase Auth con un
+  // correo sintético que nunca se le muestra a nadie. Debe coincidir con
+  // VEEDOR_EMAIL_DOMAIN en api/create-user.js.
+  var VEEDOR_EMAIL_DOMAIN = 'veedores.silbatazo.local';
+
   function showLogin(role, opts, hadWrongRoleSession) {
     if (document.getElementById('authOverlay')) return;
+    var isVeedor = role === 'veedor';
+    var loginLabel = isVeedor ? 'Usuario' : 'Correo';
+    var loginInputType = isVeedor ? 'text' : 'email';
+    var loginHint = isVeedor ? 'Entra con el usuario y la contraseña que te dieron.' : 'Entra con el correo y la contraseña que te dieron.';
     const overlay = document.createElement('div');
     overlay.id = 'authOverlay';
     overlay.style.cssText = 'position:fixed;inset:0;background:#06090f;color:#fff;display:grid;place-items:center;z-index:9999;font-family:Barlow,Arial,sans-serif;padding:18px';
@@ -90,10 +100,10 @@ window.SilbatazoAuth = (function () {
       '<form id="authForm" style="width:min(360px,100%);background:#10151d;border-radius:14px;padding:32px 26px;text-align:center">' +
         (opts.logoSrc ? '<img src="' + opts.logoSrc + '" alt="Silbatazo" style="width:150px;margin:0 auto 18px;display:block">' : '') +
         '<h1 style="font:900 1.5rem/1.2 \'Barlow Condensed\',Impact,sans-serif;text-transform:uppercase;margin:0 0 6px">' + (opts.title || 'Iniciar sesión') + '</h1>' +
-        '<p style="color:#aeb4bf;font-size:.9rem;margin:0 0 22px">Entra con el correo y la contraseña que te dieron.</p>' +
+        '<p style="color:#aeb4bf;font-size:.9rem;margin:0 0 22px">' + loginHint + '</p>' +
         '<div style="display:grid;gap:14px;text-align:left">' +
-          '<label style="font-size:.78rem;font-weight:800;text-transform:uppercase;color:#8c8f95">Correo' +
-            '<input id="authEmail" type="email" required autocomplete="username" style="width:100%;margin-top:7px;padding:14px;border-radius:9px;border:1px solid #2a3340;background:#151c26;color:#fff;font-size:1.1rem;box-sizing:border-box">' +
+          '<label style="font-size:.78rem;font-weight:800;text-transform:uppercase;color:#8c8f95">' + loginLabel +
+            '<input id="authEmail" type="' + loginInputType + '" required autocomplete="username" style="width:100%;margin-top:7px;padding:14px;border-radius:9px;border:1px solid #2a3340;background:#151c26;color:#fff;font-size:1.1rem;box-sizing:border-box">' +
           '</label>' +
           '<label style="font-size:.78rem;font-weight:800;text-transform:uppercase;color:#8c8f95">Contraseña' +
             '<input id="authPassword" type="password" required autocomplete="current-password" style="width:100%;margin-top:7px;padding:14px;border-radius:9px;border:1px solid #2a3340;background:#151c26;color:#fff;font-size:1.1rem;box-sizing:border-box">' +
@@ -114,7 +124,8 @@ window.SilbatazoAuth = (function () {
     overlay.querySelector('#authForm').addEventListener('submit', async function (e) {
       e.preventDefault();
       errorEl.textContent = '';
-      const email = overlay.querySelector('#authEmail').value.trim();
+      const raw = overlay.querySelector('#authEmail').value.trim();
+      const email = isVeedor ? (raw.toLowerCase().replace(/\s+/g, '') + '@' + VEEDOR_EMAIL_DOMAIN) : raw;
       const password = overlay.querySelector('#authPassword').value;
       const btn = overlay.querySelector('button[type="submit"]');
       btn.disabled = true;

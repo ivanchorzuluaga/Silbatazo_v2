@@ -73,8 +73,9 @@
 <div class="modal" id="veedorModal"><div class="dialog"><div class="dialog-head"><h2>Nuevo veedor</h2><button class="close" id="closeVeedorModal" type="button">×</button></div>
 <form class="form" id="veedorForm"><div class="form-grid">
   <div class="field full"><label for="veedorName">Nombre</label><input id="veedorName" name="name" required></div>
-  <div class="field"><label for="veedorPhone">Teléfono</label><input id="veedorPhone" name="phone"></div>
-  <div class="field"><label for="veedorEmail">Correo (para el login)</label><input id="veedorEmail" name="email" type="email" required></div>
+  <div class="field"><label for="veedorPhone">Teléfono</label><input id="veedorPhone" name="phone" placeholder="Ej. 3001234567"></div>
+  <div class="field"><label for="veedorUsername">Usuario (para el login, sin espacios)</label><input id="veedorUsername" name="username" required></div>
+  <p style="grid-column:1/-1;color:#8b929b;margin:0">La contraseña queda igual al teléfono (fácil de dictar por WhatsApp) — si no hay teléfono, se genera una al azar.</p>
 </div><div class="actions"><button type="button" class="ghost" id="cancelVeedorModal">Cancelar</button><button class="save" type="submit">Guardar</button></div></form>
 <div class="form" id="veedorResult" hidden></div>
 </div></div>
@@ -741,7 +742,11 @@ function hideTournamentModal(){tournamentModal.classList.remove('open')}
 closeTournamentModal.onclick=cancelTournamentModal.onclick=hideTournamentModal;tournamentModal.onclick=e=>{if(e.target===tournamentModal)hideTournamentModal()};
 tournamentForm.onsubmit=async e=>{e.preventDefault();const f=Object.fromEntries(new FormData(tournamentForm));const btn=tournamentForm.querySelector('.save');btn.disabled=true;btn.textContent='Guardando…';const {error}=await sb.from('tournaments').insert({name:f.name,notes:f.notes||null});btn.disabled=false;btn.textContent='Guardar';if(error){toastMsg('No se pudo guardar el torneo.');return}hideTournamentModal();tournamentForm.reset();toastMsg('Torneo guardado.');await loadAll();render()};
 
-function openObserverModal(){veedorModal.classList.add('open');veedorForm.reset();veedorForm.hidden=false;veedorResult.hidden=true;veedorResult.innerHTML=''}
+function slugifyUsername(s){return String(s||'').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,'.').replace(/^\.+|\.+$/g,'')}
+let veedorUsernameTouched=false;
+document.getElementById('veedorUsername').addEventListener('input',()=>veedorUsernameTouched=true);
+document.getElementById('veedorName').addEventListener('input',()=>{if(!veedorUsernameTouched)veedorUsername.value=slugifyUsername(veedorName.value)});
+function openObserverModal(){veedorModal.classList.add('open');veedorForm.reset();veedorForm.hidden=false;veedorResult.hidden=true;veedorResult.innerHTML='';veedorUsernameTouched=false}
 function hideVeedorModal(){veedorModal.classList.remove('open');render()}
 closeVeedorModal.onclick=cancelVeedorModal.onclick=hideVeedorModal;veedorModal.onclick=e=>{if(e.target===veedorModal)hideVeedorModal()};
 veedorForm.onsubmit=async e=>{
@@ -750,12 +755,12 @@ veedorForm.onsubmit=async e=>{
   const btn=veedorForm.querySelector('.save');btn.disabled=true;btn.textContent='Creando…';
   try{
     const {data:{session}}=await sb.auth.getSession();
-    const res=await fetch('/api/create-user',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+session.access_token},body:JSON.stringify({name:f.name,phone:f.phone,email:f.email,role:'veedor'})});
+    const res=await fetch('/api/create-user',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+session.access_token},body:JSON.stringify({name:f.name,phone:f.phone,username:f.username,role:'veedor'})});
     const out=await res.json();
     btn.disabled=false;btn.textContent='Guardar';
     if(!out.ok){toastMsg(out.error||'No se pudo crear el veedor.');return}
     veedorForm.hidden=true;veedorResult.hidden=false;
-    veedorResult.innerHTML=`<p>Veedor creado. Comparte estos datos por WhatsApp:</p><p><b>Correo:</b> ${esc(out.email)}<br><b>Contraseña:</b> ${esc(out.password)}</p><p style="color:#8b929b;font-size:.85rem">La puede cambiar más adelante; por ahora entra con esta en veedor.html.</p>`;
+    veedorResult.innerHTML=`<p>Veedor creado. Comparte estos datos por WhatsApp:</p><p><b>Usuario:</b> ${esc(out.username)}<br><b>Contraseña:</b> ${esc(out.password)}</p><p style="color:#8b929b;font-size:.85rem">La puede cambiar más adelante; por ahora entra con esto en veedor.html.</p>`;
     await loadAll();
   }catch(err){btn.disabled=false;btn.textContent='Guardar';toastMsg('No se pudo crear el veedor.')}
 };

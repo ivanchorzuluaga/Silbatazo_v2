@@ -13,12 +13,21 @@
 // por eso el primer paso confirma "quién llama" usando SU PROPIO token
 // (no la service key), para que las políticas RLS decidan si es admin.
 //
-// Body esperado: { name, phone?, email, password?, role? } — role es
-// 'admin' o 'veedor' (default 'veedor').
-// Si no mandas password, se genera una fácil de dictar por WhatsApp.
-// Respuesta: { ok:true, email, password, role } — el admin se la comparte
-// al usuario nuevo (puede cambiarla después; eso no lo cubre esta función
+// Body esperado:
+//   role 'admin' (default si no se manda): { name, email, password? }
+//   role 'veedor': { name, phone?, username, password? }
+//     — el veedor entra con un usuario, no con correo (muchos no tienen).
+//     Por dentro sigue siendo un usuario de Supabase Auth con un correo
+//     sintético "usuario@veedores.silbatazo.local" (nunca se manda un
+//     correo real ahí, solo es el formato que exige Supabase Auth).
+//     Si no mandas password, se usa el teléfono (solo dígitos) como
+//     contraseña; si tampoco hay teléfono, se genera una al azar.
+// Respuesta: { ok:true, email, username, password, role } — username solo
+// viene si role='veedor'. El admin comparte usuario/correo + contraseña
+// con la persona (puede cambiarla después; eso no lo cubre esta función
 // todavía).
+
+const VEEDOR_EMAIL_DOMAIN = 'veedores.silbatazo.local'; // debe coincidir con assets/js/supa.js
 
 function randomPassword() {
   const chars = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // sin 0/O/1/I/L, para no confundir al dictarla
@@ -87,13 +96,25 @@ module.exports = async (req, res) => {
     const body = req.body && typeof req.body === 'object' ? req.body : JSON.parse(req.body || '{}');
     const name = (body.name || '').trim();
     const phone = (body.phone || '').trim();
-    const email = (body.email || '').trim().toLowerCase();
-    const password = (body.password || '').trim() || randomPassword();
     const role = body.role === 'admin' ? 'admin' : 'veedor';
-    if (!name || !email) {
-      res.status(400).json({ ok: false, error: 'Falta el nombre o el correo.' });
-      return;
+    const phoneDigits = phone.replace(/[^0-9]/g, '');
+
+    let email, username;
+    if (role === 'veedor') {
+      username = (body.username || '').trim().toLowerCase().replace(/\s+/g, '');
+      if (!name || !username) {
+        res.status(400).json({ ok: false, error: 'Falta el nombre o el usuario.' });
+        return;
+      }
+      email = `${username}@${VEEDOR_EMAIL_DOMAIN}`;
+    } else {
+      email = (body.email || '').trim().toLowerCase();
+      if (!name || !email) {
+        res.status(400).json({ ok: false, error: 'Falta el nombre o el correo.' });
+        return;
+      }
     }
+    const password = (body.password || '').trim() || (role === 'veedor' && phoneDigits ? phoneDigits : randomPassword());
 
     // 3) Crear el usuario en Supabase Auth (solo posible con la service key)
     const createUserRes = await fetch(`${url}/auth/v1/admin/users`, {
@@ -119,7 +140,7 @@ module.exports = async (req, res) => {
       await supabaseRestInsert(url, serviceKey, 'observers', { profile_id: userId, name, phone: phone || null });
     }
 
-    res.status(200).json({ ok: true, email, password, role });
+    res.status(200).json({ ok: true, email, username, password, role });
   } catch (err) {
     res.status(500).json({ ok: false, error: String(err && err.message ? err.message : err) });
   }
