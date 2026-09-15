@@ -3,3 +3,6 @@ Thumbs.db
 *.log
 .env
 .env.local
+.claude/
+.vercel
+supabase/.temp/

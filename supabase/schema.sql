@@ -285,4 +285,3 @@ as $$
 $$;
 
 grant execute on function public.my_assigned_matches() to authenticated;
-

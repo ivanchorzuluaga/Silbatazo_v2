@@ -156,11 +156,26 @@ async function openMatch(matchId){
   viewList.classList.remove('active');
   viewMatch.classList.add('active');
   cardTeamSide = 'local'; cardType = null;
+  const hasRate = Number(m.team_fee) > 0;
   viewMatch.innerHTML = `
     <button class="backbtn" id="backBtn">← Mis partidos</button>
     <div class="box">
       <h2>${esc(m.match_name)}</h2>
-      <p class="sub">${fmtDate(m.match_date)} · ${fmtTime(m.match_time)} · 📍 ${esc(m.place)} — te toca reunir <b>${money(m.agreed_value)}</b></p>
+      <p class="sub">${fmtDate(m.match_date)} · ${fmtTime(m.match_time)}${m.category_name ? ' · ' + esc(m.category_name) : ''} · 📍 ${esc(m.court_name || m.place)}${m.is_walkover ? ' · ⚠ Partido por W' : ''}</p>
+      ${hasRate ? `
+        <div class="cardrow" style="border:0;padding:6px 0"><div class="info"><b>Cobrar a cada equipo</b><small>${money(m.team_fee)} × 2 equipos</small></div></div>
+        <div class="cardrow" style="border:0;padding:6px 0"><div class="info"><b>Transferir a Silbatazo</b><small>${money(m.silbatazo_fee)}</small></div></div>
+        ${m.tournament_fee ? `<div class="cardrow" style="border:0;padding:6px 0"><div class="info"><b>Transferir al torneo</b><small>${money(m.tournament_fee)}</small></div></div>` : ''}
+      ` : `<p class="sub">Te toca reunir <b>${money(m.agreed_value)}</b></p>`}
+      ${hasRate && !m.is_walkover ? `<button class="ghost" id="walkoverBtn">Marcar como partido por W</button>` : ''}
+    </div>
+    <div class="box" id="novedadesBox" hidden>
+      <h2>Novedades</h2>
+      <p class="sub">Tarjetas sin pagar de partidos anteriores de estos equipos.</p>
+      <div id="novedadesList"></div>
+    </div>
+    <div class="box">
+      <h2>Marcador</h2>
       <div class="score-row">
         <div class="team"><b>${esc(m.team_local)||'Local'}</b><input type="number" min="0" id="homeScore" value="${m.home_score ?? ''}"></div>
         <div class="vs">–</div>
@@ -170,7 +185,7 @@ async function openMatch(matchId){
     </div>
     <div class="box">
       <h2>Tarjetas</h2>
-      <p class="sub">Amarilla = $5.000 · Roja = $10.000. El jugador queda pendiente de pago hasta que marques "Pagó".</p>
+      <p class="sub">Amarilla = $5.000 · Roja = $10.000 (o la tarifa del torneo). El jugador queda pendiente de pago hasta que marques "Pagó".</p>
       <div id="cardsList"></div>
       <div class="addcard">
         <div class="field"><label>Equipo</label>
@@ -192,12 +207,33 @@ async function openMatch(matchId){
   `;
   backBtn.onclick = () => { currentOpenMatchId = null; viewMatch.classList.remove('active'); viewList.classList.add('active'); viewMatch.innerHTML=''; loadMatches(); };
   saveScore.onclick = () => saveMatchScore(m);
+  if (hasRate && !m.is_walkover) walkoverBtn.onclick = () => markWalkover(m);
   segLocal.onclick = () => { cardTeamSide='local'; segLocal.classList.add('on'); segVisitante.classList.remove('on'); };
   segVisitante.onclick = () => { cardTeamSide='visitante'; segVisitante.classList.add('on'); segLocal.classList.remove('on'); };
   btnYellow.onclick = () => { cardType='yellow'; btnYellow.classList.add('on'); btnRed.classList.remove('on'); };
   btnRed.onclick = () => { cardType='red'; btnRed.classList.add('on'); btnYellow.classList.remove('on'); };
   addCardBtn.onclick = () => addCard(m);
   await loadCards(m.match_id);
+  await loadNovedades(m.match_id);
+}
+
+async function markWalkover(m){
+  const choice = prompt(`¿Qué equipo se presentó — "${m.team_local}" o "${m.team_visitor}"? Escribe local o visitante.`, 'local');
+  if (!choice) return;
+  const wTeamId = choice.trim().toLowerCase().startsWith('v') ? m.visitor_team_id : m.local_team_id;
+  const { error } = await client.from('matches').update({ is_walkover: true, w_team_id: wTeamId }).eq('id', m.match_id);
+  if (error) { toastMsg('No se pudo marcar como por W.'); return; }
+  toastMsg('Partido marcado como por W.');
+  m.is_walkover = true;
+  await loadMatches();
+  openMatch(m.match_id);
+}
+
+async function loadNovedades(matchId){
+  const { data, error } = await client.rpc('pending_card_debts', { p_match_id: matchId });
+  if (error || !data || !data.length) { novedadesBox.hidden = true; return; }
+  novedadesBox.hidden = false;
+  novedadesList.innerHTML = data.map(d => `<div class="cardrow"><div class="badge ${d.card_type}"></div><div class="info"><b>${esc(d.player_name)}</b><small>${esc(d.team_name)} · ${money(d.fee)}${d.match_name?' · '+esc(d.match_name):''}</small></div></div>`).join('');
 }
 
 async function saveMatchScore(m){

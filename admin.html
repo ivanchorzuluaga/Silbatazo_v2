@@ -32,12 +32,16 @@
 <div class="modal" id="modal"><div class="dialog"><div class="dialog-head"><h2>Nuevo partido</h2><button class="close" id="closeModalBtn" type="button" aria-label="Cerrar">×</button></div><form class="form" id="matchForm"><div class="form-grid">
   <div class="section-h">¿Cuándo y dónde?</div>
   <div class="field"><label for="date">Fecha</label><input id="date" name="date" type="date" required></div><div class="field"><label for="time">Hora</label><input id="time" name="time" type="time" required></div>
-  <div class="field full"><label for="place">Lugar</label><input id="place" name="place" placeholder="Cancha y municipio" required></div>
+  <div class="field full"><label for="place">Cancha</label><input id="place" name="place" list="courtsList" placeholder="Cancha y municipio" required><datalist id="courtsList"></datalist></div>
   <div class="section-h">¿Quién juega?</div>
-  <div class="field full"><label for="name">Partido / equipos</label><input id="name" name="name" placeholder="Ej. Los del Barrio vs Amigos FC" required></div>
   <div class="field"><label for="client">Cliente</label><select id="client" name="client"></select></div><div class="field"><label for="type">Tipo</label><select id="type" name="type"><option>Amistoso</option><option>Torneo</option><option>Promocional</option><option>Normal</option><option>Otro</option></select></div><div class="field full"><label for="tournament">Torneo / jornada</label><select id="tournament" name="tournament"><option value="">Partido independiente</option></select></div>
+  <div class="field full" id="categoryField" hidden><label for="category">Categoría (carga la tarifa)</label><select id="category"></select></div>
+  <div class="field" id="localTeamField" hidden><label for="localTeam">Equipo local</label><select id="localTeam"></select></div><div class="field" id="visitorTeamField" hidden><label for="visitorTeam">Equipo visitante</label><select id="visitorTeam"></select></div>
+  <div class="field full"><label for="name">Partido / equipos</label><input id="name" name="name" placeholder="Ej. Los del Barrio vs Amigos FC" required></div>
   <div class="section-h">Árbitro</div>
   <div class="field"><label for="referee">Árbitro central</label><select id="referee" name="referee"></select></div><div class="field"><label for="status">Estado</label><select id="status" name="status"><option value="pending">Pendiente de árbitro</option><option value="confirmed">Confirmado</option><option value="finished">Finalizado</option><option value="cancelled">Cancelado</option></select></div>
+  <div class="field full" style="display:flex;align-items:center;gap:10px;flex-direction:row"><input id="soloArbitraje" type="checkbox" style="width:22px;height:22px;min-height:0"><label style="text-transform:none;font-weight:700">Solo arbitraje (sin veedor, sin tarjetas, sin pago a torneo)</label></div>
+  <div class="field full" id="arbiterIsObserverField" hidden style="display:flex;align-items:center;gap:10px;flex-direction:row"><input id="arbiterIsObserver" type="checkbox" style="width:22px;height:22px;min-height:0"><label style="text-transform:none;font-weight:700">El árbitro también hace de veedor</label></div>
   <div class="section-h">Veedor</div>
   <div class="field"><label for="observer">Veedor asignado</label><select id="observer" name="observer"></select></div><div class="field"><label for="observerFee">Pago al veedor</label><input id="observerFee" name="observerFee" type="number" min="0" step="1000" value="0"></div>
   <div class="financial"><h3>Dinero</h3><div class="money-basic"><div class="field"><label for="service">Cobras al cliente</label><input id="service" name="service" type="number" min="0" step="1000" value="80000"></div><div class="field"><label for="refPay">Le pagas al árbitro</label><input id="refPay" name="refPay" type="number" min="0" step="1000" value="70000"></div></div><div class="money-result"><small>Tu utilidad</small><strong id="profitCalc">$10.000</strong></div>
@@ -74,14 +78,18 @@
 <div class="form" id="veedorResult" hidden></div>
 </div></div>
 
+<div class="modal" id="courtModal"><div class="dialog"><div class="dialog-head"><h2>Nueva cancha</h2><button class="close" id="closeCourtModal" type="button">×</button></div><form class="form" id="courtForm"><div class="form-grid">
+  <div class="field full"><label for="courtName">Nombre</label><input id="courtName" name="name" required placeholder="Ej. María Luisa 1"></div>
+</div><div class="actions"><button type="button" class="ghost" id="cancelCourtModal">Cancelar</button><button class="save" type="submit">Guardar</button></div></form></div></div>
+
 <div class="toast" id="toast">Guardado</div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="assets/js/supa.js"></script>
 <script>
-const navItems=[['home','⌂','Inicio'],['matches','◫','Partidos'],['tournaments','⚑','Torneos'],['clients','◎','Clientes'],['referees','◇','Árbitros'],['observers','👁','Veedores'],['finance','$','Finanzas']];
+const navItems=[['home','⌂','Inicio'],['matches','◫','Partidos'],['tournaments','⚑','Torneos'],['courts','⛳','Canchas'],['clients','◎','Clientes'],['referees','◇','Árbitros'],['observers','👁','Veedores'],['settlements','💰','Liquidaciones'],['finance','$','Finanzas']];
 let sb, currentUser;
-let raw={clients:[],referees:[],tournaments:[],matches:[],match_officials:[],observers:[],match_observers:[],cards:[]};
-let data={clients:[],referees:[],tournaments:[],matches:[],observers:[],cardsPending:[]};
+let raw={clients:[],referees:[],tournaments:[],teams:[],matches:[],match_officials:[],observers:[],match_observers:[],cards:[],courts:[],categories:[],rates:[],settlements:[]};
+let data={clients:[],referees:[],tournaments:[],teams:[],matches:[],observers:[],cardsPending:[],courts:[],settlements:[]};
 let current='home';
 
 const money=n=>new Intl.NumberFormat('es-CO',{style:'currency',currency:'COP',maximumFractionDigits:0}).format(n||0);
@@ -91,24 +99,32 @@ function toastMsg(msg){toast.textContent=msg;toast.classList.add('show');setTime
 function todayISO(){return new Date().toISOString().slice(0,10)}
 
 async function loadAll(){
-  const [c,r,t,m,mo,ob,mob,ca]=await Promise.all([
+  const [c,r,t,tm,m,mo,ob,mob,ca,co,cat,ra,se]=await Promise.all([
     sb.from('clients').select('*').order('name'),
     sb.from('referees').select('*').order('name'),
     sb.from('tournaments').select('*').order('name'),
+    sb.from('teams').select('*').order('name'),
     sb.from('matches').select('*'),
     sb.from('match_officials').select('*'),
     sb.from('observers').select('*').order('name'),
     sb.from('match_observers').select('*'),
     sb.from('cards').select('*, matches(name, match_date)').order('created_at',{ascending:false}),
+    sb.from('courts').select('*').order('name'),
+    sb.from('tournament_categories').select('*').order('name'),
+    sb.from('rates').select('*'),
+    sb.from('settlements').select('*').order('created_at',{ascending:false}),
   ]);
-  raw.clients=c.data||[]; raw.referees=r.data||[]; raw.tournaments=t.data||[]; raw.matches=m.data||[];
+  raw.clients=c.data||[]; raw.referees=r.data||[]; raw.tournaments=t.data||[]; raw.teams=tm.data||[]; raw.matches=m.data||[];
   raw.match_officials=mo.data||[]; raw.observers=ob.data||[]; raw.match_observers=mob.data||[]; raw.cards=ca.data||[];
+  raw.courts=co.data||[]; raw.categories=cat.data||[]; raw.rates=ra.data||[]; raw.settlements=se.data||[];
   buildViewModels();
 }
 
 function buildViewModels(){
   const byId=list=>Object.fromEntries(list.map(x=>[x.id,x]));
   const clientById=byId(raw.clients),tournamentById=byId(raw.tournaments),refereeById=byId(raw.referees),observerById=byId(raw.observers);
+  const teamById=byId(raw.teams),courtById=byId(raw.courts),categoryById=byId(raw.categories);
+  const rateByCategory=Object.fromEntries(raw.rates.map(r=>[r.category_id,r]));
   const centralByMatch={}; raw.match_officials.forEach(o=>{ if(o.role==='central') centralByMatch[o.match_id]=o });
   const obsByMatch=Object.fromEntries(raw.match_observers.map(o=>[o.match_id,o]));
   const pendingByMatch={}; raw.cards.forEach(c=>{ if(!c.paid) pendingByMatch[c.match_id]=(pendingByMatch[c.match_id]||0)+1 });
@@ -124,23 +140,204 @@ function buildViewModels(){
       referee:central&&refereeById[central.referee_id]?refereeById[central.referee_id].name:'Sin asignar',referee_id:central?central.referee_id:'',
       observer:obs&&observerById[obs.observer_id]?observerById[obs.observer_id].name:'Sin asignar',observer_id:obs?obs.observer_id:'',observerFee:obs?Number(obs.agreed_value)||0:0,
       pendingCards:pendingByMatch[m.id]||0,
+      category_id:m.category_id||'',category:m.category_id&&categoryById[m.category_id]?categoryById[m.category_id].name:'',
+      court_id:m.court_id||'',court:m.court_id&&courtById[m.court_id]?courtById[m.court_id].name:'',
+      local_team_id:m.local_team_id||'',visitor_team_id:m.visitor_team_id||'',
+      localTeam:m.local_team_id&&teamById[m.local_team_id]?teamById[m.local_team_id].name:'',
+      visitorTeam:m.visitor_team_id&&teamById[m.visitor_team_id]?teamById[m.visitor_team_id].name:'',
+      serviceType:m.service_type||'completo',arbiterIsObserver:!!m.arbiter_is_observer,
+      isWalkover:!!m.is_walkover,wTeamId:m.w_team_id||'',
+      teamFee:Number(m.team_fee)||0,silbatazoFee:Number(m.silbatazo_fee)||0,tournamentFee:Number(m.tournament_fee)||0,
     };
   });
   data.clients=raw.clients;
   data.referees=raw.referees;
   data.observers=raw.observers;
-  data.tournaments=raw.tournaments.map(t=>({...t,total:data.matches.filter(m=>m.tournament_id===t.id).length,played:data.matches.filter(m=>m.tournament_id===t.id&&m.status==='finished').length}));
+  data.courts=raw.courts;
+  data.teams=raw.teams;
+  data.tournaments=raw.tournaments.map(t=>({...t,
+    total:data.matches.filter(m=>m.tournament_id===t.id).length,
+    played:data.matches.filter(m=>m.tournament_id===t.id&&m.status==='finished').length,
+    categories:raw.categories.filter(c=>c.tournament_id===t.id).map(c=>({...c,rate:rateByCategory[c.id]||null})),
+    teams:raw.teams.filter(tm=>tm.tournament_id===t.id),
+  }));
   data.cardsPending=raw.cards.filter(c=>!c.paid).map(c=>({...c,matchName:(c.matches&&c.matches.name)||'',matchDate:(c.matches&&c.matches.match_date)||''}));
+  data.settlements=raw.settlements.map(s=>({...s,observerName:observerById[s.observer_id]?observerById[s.observer_id].name:'Veedor'}));
+}
+
+function courtsView(){
+  const rows=data.courts.map(c=>`<article class="entity"><div class="entity-top"><div><h3>${esc(c.name)}</h3></div><span class="status ${c.active?'confirmed':'cancelled'}">${c.active?'Activa':'Inactiva'}</span></div><div class="entity-stats"><div><small>Partidos jugados aquí</small><strong>${data.matches.filter(m=>m.court_id===c.id).length}</strong></div></div><button class="link-btn" onclick="toggleCourt('${c.id}',${c.active})">${c.active?'Desactivar':'Activar'}</button></article>`).join('')||'<div class="empty">Todavía no has agregado ninguna cancha.</div>';
+  return `<section class="intro"><div><span class="eyebrow">Catálogo</span><h2>Canchas</h2><p>Se usan al armar partidos, evitando duplicados.</p></div><button class="new" onclick="openCourtModal()">+ Agregar cancha</button></section><div class="entity-grid">${rows}</div>`;
+}
+async function toggleCourt(id,active){const {error}=await sb.from('courts').update({active:!active}).eq('id',id);if(error){toastMsg('No se pudo actualizar la cancha.');return}await loadAll();render()}
+function openCourtModal(){courtModal.classList.add('open')}
+function hideCourtModal(){courtModal.classList.remove('open')}
+closeCourtModal.onclick=cancelCourtModal.onclick=hideCourtModal;courtModal.onclick=e=>{if(e.target===courtModal)hideCourtModal()};
+courtForm.onsubmit=async e=>{e.preventDefault();const f=Object.fromEntries(new FormData(courtForm));const btn=courtForm.querySelector('.save');btn.disabled=true;btn.textContent='Guardando…';const {error}=await sb.from('courts').insert({name:f.name});btn.disabled=false;btn.textContent='Guardar';if(error){toastMsg('No se pudo guardar la cancha.');return}hideCourtModal();courtForm.reset();toastMsg('Cancha guardada.');await loadAll();render()};
+
+function categoriesRows(t){return t.categories.length?t.categories.map(c=>{const r=c.rate;return `<div class="mcard"><div class="who"><b>${esc(c.name)}</b><span class="meta">${r?`Equipo ${money(r.team_fee)} · Árbitro ${money(r.referee_fee)} · Veedor ${money(r.observer_fee)} · Silbatazo ${money(r.silbatazo_fee)} · Torneo ${money(r.tournament_fee)} · 🟨${money(r.yellow_fee)} 🟥${money(r.red_fee)}`:'Sin tarifa configurada'}</span></div><button class="link-btn" onclick="deleteCategory('${c.id}','${t.id}')">Eliminar</button></div>`}).join(''):'<div class="empty">Todavía no hay categorías.</div>'}
+function teamsRows(t){return t.teams.length?t.teams.map(tm=>`<div class="mcard"><div class="who"><b>${esc(tm.name)}</b></div><button class="link-btn" onclick="deleteTeam('${tm.id}','${t.id}')">Eliminar</button></div>`).join(''):'<div class="empty">Todavía no hay equipos.</div>'}
+
+function openTournamentConfig(id){
+  const t=data.tournaments.find(x=>x.id===id);
+  content.innerHTML=`<section class="intro"><div><button class="link-btn" onclick="render()">← Todos los torneos</button><span class="eyebrow" style="display:block;margin-top:16px">Configuración</span><h2>${esc(t.name)}</h2><p>Categorías, tarifas y equipos fijos.</p></div><button class="link-btn" onclick="openTournament('${id}')">Ver jornada →</button></section>
+  <div class="box"><div class="box-head"><h3>Reglas del torneo</h3></div><form class="form" id="tournamentRulesForm" data-id="${id}"><div class="form-grid">
+    <div class="field full" style="display:flex;align-items:center;gap:10px;flex-direction:row"><input id="requiresObserver" type="checkbox" style="width:22px;height:22px;min-height:0" ${t.requires_observer?'checked':''}><label style="text-transform:none;font-weight:700">Este torneo requiere veedor</label></div>
+    <div class="field full" style="display:flex;align-items:center;gap:10px;flex-direction:row"><input id="hasCards" type="checkbox" style="width:22px;height:22px;min-height:0" ${t.has_cards?'checked':''}><label style="text-transform:none;font-weight:700">Registra tarjetas amarillas/rojas</label></div>
+    <div class="field"><label for="splitSilbatazo">Si el árbitro es veedor, % para Silbatazo</label><input id="splitSilbatazo" type="number" min="0" max="100" value="${t.arbiter_observer_split_silbatazo_pct}"></div>
+    <div class="field"><label for="splitTorneo">% para el torneo</label><input id="splitTorneo" type="number" min="0" max="100" value="${t.arbiter_observer_split_tournament_pct}"></div>
+  </div><div class="actions"><button class="save" type="submit">Guardar reglas</button></div></form></div>
+  <div class="box"><div class="box-head"><h3>Categorías y tarifas</h3></div><div id="categoriesList">${categoriesRows(t)}</div>
+    <form class="form" id="categoryForm" data-tournament="${id}"><div class="form-grid">
+      <div class="section-h">Nueva categoría</div>
+      <div class="field"><label for="catName">Nombre</label><input id="catName" required placeholder="Ej. Sub-14"></div>
+      <div class="field"><label for="catTeamFee">Valor por equipo</label><input id="catTeamFee" type="number" min="0" step="1000" value="40000"></div>
+      <div class="field"><label for="catRefFee">Valor árbitro</label><input id="catRefFee" type="number" min="0" step="1000" value="35000"></div>
+      <div class="field"><label for="catObsFee">Valor veedor</label><input id="catObsFee" type="number" min="0" step="1000" value="15000"></div>
+      <div class="field"><label for="catSilFee">Valor Silbatazo</label><input id="catSilFee" type="number" min="0" step="1000" value="20000"></div>
+      <div class="field"><label for="catTorFee">Valor torneo</label><input id="catTorFee" type="number" min="0" step="1000" value="10000"></div>
+      <p id="catSumHint" style="grid-column:1/-1;color:#8b929b;margin:0"></p>
+      <div class="section-h">Multas</div>
+      <div class="field"><label for="catYellow">Amarilla — total</label><input id="catYellow" type="number" min="0" step="500" value="5000"></div>
+      <div class="field"><label for="catYellowSil">Amarilla — Silbatazo</label><input id="catYellowSil" type="number" min="0" step="500" value="2500"></div>
+      <div class="field"><label for="catYellowTor">Amarilla — torneo</label><input id="catYellowTor" type="number" min="0" step="500" value="2500"></div>
+      <div class="field"><label for="catRed">Roja — total</label><input id="catRed" type="number" min="0" step="500" value="10000"></div>
+      <div class="field"><label for="catRedSil">Roja — Silbatazo</label><input id="catRedSil" type="number" min="0" step="500" value="6000"></div>
+      <div class="field"><label for="catRedTor">Roja — torneo</label><input id="catRedTor" type="number" min="0" step="500" value="4000"></div>
+    </div><div class="actions"><button class="save" type="submit">+ Agregar categoría</button></div></form>
+  </div>
+  <div class="box"><div class="box-head"><h3>Equipos</h3></div><div id="teamsList" class="match-list">${teamsRows(t)}</div>
+    <form class="form" id="teamsForm" data-tournament="${id}"><div class="field full"><label for="teamsBulk">Agregar equipos (uno por línea)</label><textarea id="teamsBulk" rows="4" placeholder="Los del Barrio&#10;Amigos FC"></textarea></div><div class="actions"><button class="save" type="submit">+ Agregar equipos</button></div></form>
+  </div>`;
+  pageTitle.textContent=t.name;
+  tournamentRulesForm.onsubmit=saveTournamentRules;
+  categoryForm.onsubmit=saveCategoryRate;
+  teamsForm.onsubmit=saveTeamsBulk;
+  ['catTeamFee','catRefFee','catObsFee','catSilFee','catTorFee'].forEach(id=>document.getElementById(id).addEventListener('input',updateCatSumHint));
+  updateCatSumHint();
+}
+function updateCatSumHint(){
+  const teamFee=+catTeamFee.value||0,sum=(+catRefFee.value||0)+(+catObsFee.value||0)+(+catSilFee.value||0)+(+catTorFee.value||0),expected=teamFee*2;
+  catSumHint.textContent=sum===expected?`✓ La suma cuadra: ${money(sum)}`:`⚠ La suma (${money(sum)}) debería ser ${money(expected)} (valor por equipo × 2)`;
+}
+async function saveTournamentRules(e){
+  e.preventDefault();
+  const id=tournamentRulesForm.dataset.id;
+  const btn=tournamentRulesForm.querySelector('.save');btn.disabled=true;btn.textContent='Guardando…';
+  const {error}=await sb.from('tournaments').update({requires_observer:requiresObserver.checked,has_cards:hasCards.checked,arbiter_observer_split_silbatazo_pct:+splitSilbatazo.value||0,arbiter_observer_split_tournament_pct:+splitTorneo.value||0}).eq('id',id);
+  btn.disabled=false;btn.textContent='Guardar reglas';
+  if(error){toastMsg('No se pudieron guardar las reglas.');return}
+  toastMsg('Reglas guardadas.');await loadAll();openTournamentConfig(id);
+}
+async function saveCategoryRate(e){
+  e.preventDefault();
+  const tournamentId=categoryForm.dataset.tournament;
+  const btn=categoryForm.querySelector('.save');btn.disabled=true;btn.textContent='Guardando…';
+  const {data:cat,error}=await sb.from('tournament_categories').insert({tournament_id:tournamentId,name:catName.value.trim()}).select().single();
+  if(error){btn.disabled=false;btn.textContent='+ Agregar categoría';toastMsg('No se pudo crear la categoría (¿nombre repetido?).');return}
+  const {error:rateError}=await sb.from('rates').insert({tournament_id:tournamentId,category_id:cat.id,team_fee:+catTeamFee.value||0,referee_fee:+catRefFee.value||0,observer_fee:+catObsFee.value||0,silbatazo_fee:+catSilFee.value||0,tournament_fee:+catTorFee.value||0,yellow_fee:+catYellow.value||0,yellow_silbatazo:+catYellowSil.value||0,yellow_tournament:+catYellowTor.value||0,red_fee:+catRed.value||0,red_silbatazo:+catRedSil.value||0,red_tournament:+catRedTor.value||0});
+  btn.disabled=false;btn.textContent='+ Agregar categoría';
+  if(rateError){toastMsg('La categoría se creó pero falló la tarifa: '+rateError.message);await loadAll();openTournamentConfig(tournamentId);return}
+  toastMsg('Categoría y tarifa guardadas.');await loadAll();openTournamentConfig(tournamentId);
+}
+async function deleteCategory(id,tournamentId){
+  if(!confirm('¿Eliminar esta categoría? También se borra su tarifa.'))return;
+  const {error}=await sb.from('tournament_categories').delete().eq('id',id);
+  if(error){toastMsg('No se pudo eliminar (puede tener partidos asociados).');return}
+  toastMsg('Categoría eliminada.');await loadAll();openTournamentConfig(tournamentId);
+}
+async function saveTeamsBulk(e){
+  e.preventDefault();
+  const tournamentId=teamsForm.dataset.tournament;
+  const names=teamsBulk.value.split('\n').map(s=>s.trim()).filter(Boolean);
+  if(!names.length){toastMsg('Escribe al menos un equipo.');return}
+  const btn=teamsForm.querySelector('.save');btn.disabled=true;btn.textContent='Guardando…';
+  const {error}=await sb.from('teams').insert(names.map(name=>({tournament_id:tournamentId,name})));
+  btn.disabled=false;btn.textContent='+ Agregar equipos';
+  if(error){toastMsg('No se pudieron guardar (¿nombres repetidos?).');return}
+  toastMsg('Equipos agregados.');await loadAll();openTournamentConfig(tournamentId);
+}
+async function deleteTeam(id,tournamentId){
+  if(!confirm('¿Eliminar este equipo?'))return;
+  const {error}=await sb.from('teams').delete().eq('id',id);
+  if(error){toastMsg('No se pudo eliminar (puede tener partidos asociados).');return}
+  toastMsg('Equipo eliminado.');await loadAll();openTournamentConfig(tournamentId);
+}
+
+function computeSettlement(observerId,start,end){
+  const matches=data.matches.filter(m=>m.observer_id===observerId&&m.status==='finished'&&m.date>=start&&m.date<=end);
+  const totals={total_collected:0,total_paid_referees:0,total_cards_collected:0,total_observer:0,total_silbatazo:0,total_tournament:0,w_adjustment:0};
+  matches.forEach(m=>{
+    const collected=m.isWalkover?m.teamFee:m.teamFee*2;
+    totals.total_collected+=collected;
+    totals.total_paid_referees+=m.refPay;
+    totals.total_observer+=m.observerFee;
+    if(m.isWalkover){totals.w_adjustment+=m.silbatazoFee+m.tournamentFee}
+    else{totals.total_silbatazo+=m.silbatazoFee;totals.total_tournament+=m.tournamentFee}
+    raw.cards.filter(c=>c.match_id===m.id&&c.paid).forEach(c=>{totals.total_cards_collected+=Number(c.fee)||0;totals.total_silbatazo+=Number(c.silbatazo_fee)||0;totals.total_tournament+=Number(c.tournament_fee)||0});
+  });
+  return {matches,totals};
+}
+function settlementsView(){
+  const rows=data.settlements.map(s=>`<div class="mcard"><div class="who"><b>${esc(s.observerName)}</b><span class="meta">${s.start_date} a ${s.end_date} · ${s.status==='cerrada'?'Cerrada':'Pendiente'}</span></div><div class="money-mini"><b>${money(s.total_silbatazo+s.total_tournament)}</b><small>a transferir</small></div></div>`).join('')||'<div class="empty">Todavía no hay liquidaciones.</div>';
+  return `<section class="intro"><div><span class="eyebrow">Cierre semanal</span><h2>Liquidaciones</h2><p>Calculadas a partir de los partidos finalizados de cada veedor.</p></div><button class="new" onclick="openSettlementBuilder()">+ Nueva liquidación</button></section><div class="match-list">${rows}</div>`;
+}
+function openSettlementBuilder(){
+  const today=todayISO(),weekAgo=new Date(Date.now()-7*86400000).toISOString().slice(0,10);
+  content.innerHTML=`<section class="intro"><div><button class="link-btn" onclick="render()">← Liquidaciones</button><span class="eyebrow" style="display:block;margin-top:16px">Nueva liquidación</span><h2>Calcular cierre</h2></div></section>
+  <div class="box"><div class="form"><div class="form-grid">
+    <div class="field"><label for="settleObserver">Veedor</label><select id="settleObserver">${data.observers.map(o=>`<option value="${o.id}">${esc(o.name)}</option>`).join('')||'<option value="">Sin veedores</option>'}</select></div>
+    <div class="field"><label for="settleStart">Desde</label><input id="settleStart" type="date" value="${weekAgo}"></div>
+    <div class="field"><label for="settleEnd">Hasta</label><input id="settleEnd" type="date" value="${today}"></div>
+  </div><div class="actions"><button type="button" class="save" id="settleCalcBtn">Calcular</button></div></div></div>
+  <div id="settleResult"></div>`;
+  pageTitle.textContent='Nueva liquidación';
+  settleCalcBtn.onclick=()=>renderSettlementPreview(settleObserver.value,settleStart.value,settleEnd.value);
+}
+function renderSettlementPreview(observerId,start,end){
+  if(!observerId){toastMsg('Elige un veedor.');return}
+  const {matches,totals}=computeSettlement(observerId,start,end);
+  const observerName=(data.observers.find(o=>o.id===observerId)||{}).name||'Veedor';
+  settleResult.innerHTML=`<div class="box money"><div class="box-head"><h3>Resumen — ${esc(observerName)}</h3></div><div class="money-list">
+    <div class="money-row"><span>Partidos incluidos</span><strong>${matches.length}</strong></div>
+    <div class="money-row"><span>Total recaudado</span><strong>${money(totals.total_collected)}</strong></div>
+    <div class="money-row"><span>Pagado a árbitros</span><strong>${money(totals.total_paid_referees)}</strong></div>
+    <div class="money-row"><span>Multas cobradas</span><strong>${money(totals.total_cards_collected)}</strong></div>
+    <div class="money-row"><span>Se queda el veedor</span><strong>${money(totals.total_observer)}</strong></div>
+    <div class="money-row"><span>Transferir a Silbatazo</span><strong>${money(totals.total_silbatazo)}</strong></div>
+    <div class="money-row"><span>Transferir al torneo</span><strong>${money(totals.total_tournament)}</strong></div>
+    <div class="money-row"><span>Ajuste por partidos "por W" (debe el torneo)</span><strong>${money(totals.w_adjustment)}</strong></div>
+  </div></div>
+  <div class="match-list">${matches.length?matches.map(m=>`<div class="mcard"><div class="who"><b>${esc(m.name)}</b><span class="meta">${m.date} · ${esc(m.category||m.tournament||'Partido suelto')}${m.isWalkover?' · Por W':''}</span></div><div class="money-mini"><b>${money(m.isWalkover?m.teamFee:m.teamFee*2)}</b><small>recaudado</small></div></div>`).join(''):'<div class="empty">No hay partidos finalizados de este veedor en ese rango.</div>'}</div>
+  <div class="actions"><button class="save" id="closeSettlementBtn">Cerrar liquidación</button></div>`;
+  closeSettlementBtn.onclick=()=>closeSettlement(observerId,start,end,totals,matches);
+}
+async function closeSettlement(observerId,start,end,totals,matches){
+  const btn=closeSettlementBtn;btn.disabled=true;btn.textContent='Guardando…';
+  const {data:settlement,error}=await sb.from('settlements').insert({observer_id:observerId,start_date:start,end_date:end,status:'cerrada',closed_at:new Date().toISOString(),total_collected:totals.total_collected,total_paid_referees:totals.total_paid_referees,total_cards_collected:totals.total_cards_collected,total_observer:totals.total_observer,total_silbatazo:totals.total_silbatazo,total_tournament:totals.total_tournament,w_adjustment:totals.w_adjustment}).select().single();
+  if(error){btn.disabled=false;btn.textContent='Cerrar liquidación';toastMsg('No se pudo cerrar la liquidación.');return}
+  if(matches.length){await sb.from('settlement_matches').insert(matches.map(m=>({settlement_id:settlement.id,match_id:m.id})))}
+  toastMsg('Liquidación cerrada.');current='settlements';await loadAll();render();
 }
 
 function nav(){const html=navItems.map(([id,icon,label])=>`<button data-view="${id}" class="${current===id?'active':''}"><i>${icon}</i>${label}</button>`).join('');desktopNav.innerHTML=html;mobileNav.innerHTML=navItems.map(([id,icon,label])=>`<button data-view="${id}" class="${current===id?'active':''}"><i>${icon}</i>${label}</button>`).join('');document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>{current=b.dataset.view;render()})}
 function matchRow(m){return `<div class="match"><div class="time">${m.time}<small>${(m.date||'').slice(5).replace('-','/')}</small></div><div><b>${esc(m.name)}</b><span class="meta">📍 ${esc(m.place)} · ⚖ ${esc(m.referee)}</span></div><span class="status ${m.status}">${statusLabel[m.status]}</span></div>`}
 function dashboard(){const matches=data.matches;const pending=matches.filter(m=>m.status==='pending').length;const total=matches.reduce((a,m)=>a+m.service,0);const refPay=matches.reduce((a,m)=>a+m.refPay,0);const paid=matches.reduce((a,m)=>a+m.toSilbatazo+m.toRef,0);return `<section class="intro"><div><span class="eyebrow">Control operativo</span><h2>Todo bajo control.</h2><p>Lo importante de Silbatazo, sin vueltas.</p></div></section><section class="cards"><div class="metric"><small>Partidos hoy</small><strong>${matches.filter(m=>m.date===todayISO()).length}</strong><span>Agenda del día</span></div><div class="metric" style="--accent:var(--yellow)"><small>Sin árbitro</small><strong>${pending}</strong><span>Requieren acción</span></div><div class="metric"><small>Total registrados</small><strong>${matches.length}</strong><span>${matches.filter(m=>m.status==='confirmed').length} confirmados</span></div><div class="metric" style="--accent:var(--yellow)"><small>Utilidad estimada</small><strong>${money(total-refPay)}</strong><span>Según partidos registrados</span></div></section><section class="grid"><div class="box"><div class="box-head"><h3>Próximos partidos</h3><button data-go="matches">Ver todos</button></div>${matches.slice().sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time)).slice(0,6).map(matchRow).join('')||'<div class="empty">Todavía no hay partidos registrados.</div>'}</div><div class="box money"><div class="box-head"><h3>Resumen financiero</h3></div><div class="money-list"><div class="money-row"><span>Servicios registrados</span><strong>${money(total)}</strong></div><div class="money-row"><span>Pagado por clientes</span><strong>${money(paid)}</strong></div><div class="money-row"><span>Pendiente por cobrar</span><strong>${money(total-paid)}</strong></div><div class="money-row"><span>Pago acordado árbitros</span><strong>${money(refPay)}</strong></div></div><p class="alert">La utilidad se calcula por partido. No se presupone un porcentaje fijo.</p></div></section>`}
 function matchesView(){return `<section class="intro"><div><span class="eyebrow">Operación</span><h2>Partidos</h2><p>Agenda, asignaciones y dinero en un solo lugar.</p></div></section><div class="toolbar"><input class="search" id="matchSearch" placeholder="Buscar partido, cliente o árbitro…"><select class="filter" id="statusFilter"><option value="">Todos los estados</option><option value="pending">Pendiente</option><option value="confirmed">Confirmado</option><option value="finished">Finalizado</option><option value="cancelled">Cancelado</option></select></div><div class="match-list" id="matchTable">${matchCards(data.matches)}</div>`}
-function matchCards(list){return list.map(m=>`<div class="mcard"><div class="time">${m.time}<small>${(m.date||'').slice(5).replace('-','/')}</small></div><div class="who"><b>${esc(m.name)}</b><span class="meta">📍 ${esc(m.place)} · ⚖ ${esc(m.referee)} · ${esc(m.client)}${m.pendingCards?' · ⚠ '+m.pendingCards+' tarjeta(s) pendiente(s)':''}</span></div><div class="money-mini"><b>${money(m.service-m.refPay)}</b><small>utilidad</small></div><span class="status ${m.status}">${statusLabel[m.status]}</span></div>`).join('')||`<div class="empty">No encontramos partidos.</div>`}
-function tournamentsView(){return `<section class="intro"><div><span class="eyebrow">Grupos de partidos</span><h2>Torneos</h2><p>Cada partido conserva su precio, árbitros y pagos.</p></div><button class="new" onclick="openTournamentModal()">+ Crear torneo</button></section><div class="entity-grid">${data.tournaments.map(t=>{const statusText=t.status==='active'?'Activo':t.status==='finished'?'Finalizado':t.status==='cancelled'?'Cancelado':'Borrador';const statusClass=t.status==='active'?'confirmed':t.status==='finished'?'finished':t.status==='cancelled'?'cancelled':'pending';return `<article class="entity tournament"><div class="entity-top"><div><h3>${esc(t.name)}</h3><p>${statusText}</p></div><span class="status ${statusClass}">${statusText}</span></div><div class="entity-stats"><div><small>Partidos</small><strong>${t.total}</strong></div><div><small>Jugados</small><strong>${t.played}</strong></div></div><div class="progress"><i style="width:${t.total?Math.min(100,t.played/t.total*100):0}%"></i></div><p><b>${t.total-t.played}</b> partidos pendientes</p><button class="link-btn" onclick="openTournament('${t.id}')">Ver jornada completa →</button></article>`}).join('')||'<div class="empty">Todavía no has creado ningún torneo.</div>'}</div>`}
-function openTournament(id){const t=data.tournaments.find(x=>x.id===id);const list=data.matches.filter(m=>m.tournament_id===id).sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time));content.innerHTML=`<section class="intro"><div><button class="link-btn" onclick="render()">← Todos los torneos</button><span class="eyebrow" style="display:block;margin-top:16px">Jornada completa</span><h2>${esc(t.name)}</h2><p>${list.length} partidos registrados</p></div><button class="new" onclick="openMatchForTournament('${id}')">+ Agregar partido</button></section><div class="box"><div class="box-head"><h3>Partidos del torneo</h3></div>${list.length?list.map(matchRow).join(''):'<div class="empty">Todavía no hay partidos registrados.</div>'}</div>`;pageTitle.textContent=t.name}
-function openMatchForTournament(id){openModal();document.getElementById('type').value='Torneo';document.getElementById('tournament').value=id}
+function matchCards(list){return list.map(m=>`<div class="mcard"><div class="time">${m.time}<small>${(m.date||'').slice(5).replace('-','/')}</small></div><div class="who"><b>${esc(m.name)}</b><span class="meta">📍 ${esc(m.court||m.place)} · ⚖ ${esc(m.referee)} · ${esc(m.category||m.client)}${m.isWalkover?' · ⚠ Por W':''}${m.pendingCards?' · ⚠ '+m.pendingCards+' tarjeta(s) pendiente(s)':''}</span></div><div class="money-mini"><b>${money(m.service-m.refPay)}</b><small>utilidad</small></div><span class="status ${m.status}">${statusLabel[m.status]}</span>${m.local_team_id&&m.visitor_team_id&&!m.isWalkover?`<button class="link-btn" onclick="markWalkover('${m.id}')">Por W</button>`:''}</div>`).join('')||`<div class="empty">No encontramos partidos.</div>`}
+async function markWalkover(id){
+  const m=data.matches.find(x=>x.id===id);
+  if(!m)return;
+  const choice=prompt(`¿Qué equipo se presentó — "${m.localTeam}" o "${m.visitorTeam}"? Escribe local o visitante.`,'local');
+  if(!choice)return;
+  const wTeamId=choice.trim().toLowerCase().startsWith('v')?m.visitor_team_id:m.local_team_id;
+  const {error}=await sb.from('matches').update({is_walkover:true,w_team_id:wTeamId}).eq('id',id);
+  if(error){toastMsg('No se pudo marcar como por W.');return}
+  toastMsg('Partido marcado como por W.');await loadAll();render();
+}
+function tournamentsView(){return `<section class="intro"><div><span class="eyebrow">Grupos de partidos</span><h2>Torneos</h2><p>Cada partido conserva su precio, árbitros y pagos.</p></div><button class="new" onclick="openTournamentModal()">+ Crear torneo</button></section><div class="entity-grid">${data.tournaments.map(t=>{const statusText=t.status==='active'?'Activo':t.status==='finished'?'Finalizado':t.status==='cancelled'?'Cancelado':'Borrador';const statusClass=t.status==='active'?'confirmed':t.status==='finished'?'finished':t.status==='cancelled'?'cancelled':'pending';return `<article class="entity tournament"><div class="entity-top"><div><h3>${esc(t.name)}</h3><p>${statusText}</p></div><span class="status ${statusClass}">${statusText}</span></div><div class="entity-stats"><div><small>Partidos</small><strong>${t.total}</strong></div><div><small>Jugados</small><strong>${t.played}</strong></div></div><div class="progress"><i style="width:${t.total?Math.min(100,t.played/t.total*100):0}%"></i></div><p><b>${t.total-t.played}</b> partidos pendientes · <b>${t.categories.length}</b> categorías</p><button class="link-btn" onclick="openTournament('${t.id}')">Ver jornada completa →</button><button class="link-btn" onclick="openTournamentConfig('${t.id}')">⚙ Configurar</button></article>`}).join('')||'<div class="empty">Todavía no has creado ningún torneo.</div>'}</div>`}
+function openTournament(id){const t=data.tournaments.find(x=>x.id===id);const list=data.matches.filter(m=>m.tournament_id===id).sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time));content.innerHTML=`<section class="intro"><div><button class="link-btn" onclick="render()">← Todos los torneos</button><span class="eyebrow" style="display:block;margin-top:16px">Jornada completa</span><h2>${esc(t.name)}</h2><p>${list.length} partidos registrados</p></div><div style="display:flex;gap:10px"><button class="ghost" onclick="openTournamentConfig('${id}')">⚙ Configurar</button><button class="new" onclick="openMatchForTournament('${id}')">+ Agregar partido</button></div></section><div class="box"><div class="box-head"><h3>Partidos del torneo</h3></div>${list.length?list.map(matchRow).join(''):'<div class="empty">Todavía no hay partidos registrados.</div>'}</div>`;pageTitle.textContent=t.name}
+function openMatchForTournament(id){openModal();document.getElementById('type').value='Torneo';document.getElementById('tournament').value=id;onTournamentChange()}
 function clientsView(){return entityView('Clientes','Historial, cartera y contacto.',data.clients,c=>({sub:`${c.type==='company'?'Empresa':c.type==='tournament'?'Torneo':'Persona'} · ${c.phone||'sin teléfono'}`,a:'Partidos',av:data.matches.filter(m=>m.client===c.name).length,b:'Facturado',bv:money(data.matches.filter(m=>m.client===c.name).reduce((x,m)=>x+m.service,0))}),'openClientModal()')}
 function refereesView(){return entityView('Árbitros','Asignaciones y pagos sin campos innecesarios.',data.referees,r=>({sub:`${r.phone||'sin teléfono'}`,a:'Partidos',av:data.matches.filter(m=>m.referee===r.name).length,b:'Por recibir',bv:money(data.matches.filter(m=>m.referee===r.name).reduce((x,m)=>x+Math.max(0,m.refPay-m.toRef-m.paidRef),0)),note:`${r.accepts_promotions?'✓ Promociones':'No promociones'}${r.availability?' · '+r.availability:''}`}),'openRefereeModal()')}
 function entityView(title,desc,list,map,addAction){return `<section class="intro"><div><span class="eyebrow">Base operativa</span><h2>${title}</h2><p>${desc}</p></div><button class="new" onclick="${addAction}">+ Agregar</button></section><div class="entity-grid">${list.map(e=>{const x=map(e);return `<article class="entity"><div class="entity-top"><div><h3>${esc(e.name)}</h3><p>${esc(x.sub)}</p></div><span class="status confirmed">Activo</span></div><div class="entity-stats"><div><small>${x.a}</small><strong>${x.av}</strong></div><div><small>${x.b}</small><strong>${x.bv}</strong></div></div>${x.note?`<p>${esc(x.note)}</p>`:''}</article>`}).join('')||'<div class="empty">Todavía no has agregado ninguno.</div>'}</div>`}
@@ -151,7 +348,7 @@ function observersView(){
 }
 async function markCardPaid(id){const {error}=await sb.from('cards').update({paid:true,paid_at:new Date().toISOString()}).eq('id',id);if(error){toastMsg('No se pudo marcar el pago.');return}toastMsg('Tarjeta marcada como pagada.');await loadAll();render()}
 function financeView(){const rows=data.matches.map(m=>{const utility=m.service-m.refPay,debt=Math.max(0,m.refPay-m.toRef-m.paidRef),clientDebt=Math.max(0,m.service-m.toSilbatazo-m.toRef);return {...m,utility,debt,clientDebt}});return `<section class="intro"><div><span class="eyebrow">Dinero por partido</span><h2>Finanzas</h2><p>Quién recibió cuánto, qué falta y qué quedó.</p></div></section><section class="cards"><div class="metric"><small>Servicios</small><strong>${money(rows.reduce((a,m)=>a+m.service,0))}</strong></div><div class="metric" style="--accent:var(--yellow)"><small>Por cobrar</small><strong>${money(rows.reduce((a,m)=>a+m.clientDebt,0))}</strong></div><div class="metric" style="--accent:var(--red)"><small>Debemos árbitros</small><strong>${money(rows.reduce((a,m)=>a+m.debt,0))}</strong></div><div class="metric"><small>Utilidad</small><strong>${money(rows.reduce((a,m)=>a+m.utility,0))}</strong></div></section><div class="match-list">${rows.map(m=>`<div class="mcard"><div class="who"><b>${esc(m.name)}</b><span class="meta">${m.date} · servicio ${money(m.service)}</span></div><div class="money-mini"><b>${money(m.utility)}</b><small>utilidad</small></div><div class="money-mini"><b>${money(m.debt)}</b><small>debemos árbitro</small></div></div>`).join('')||'<div class="empty">No hay partidos registrados.</div>'}</div>`}
-function render(){nav();pageTitle.textContent=navItems.find(x=>x[0]===current)[2];content.innerHTML=current==='home'?dashboard():current==='matches'?matchesView():current==='tournaments'?tournamentsView():current==='clients'?clientsView():current==='referees'?refereesView():current==='observers'?observersView():financeView();document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>{current=b.dataset.go;render()});if(current==='matches'){const filter=()=>{const q=matchSearch.value.toLowerCase(),s=statusFilter.value;matchTable.innerHTML=matchCards(data.matches.filter(m=>(!s||m.status===s)&&JSON.stringify(m).toLowerCase().includes(q)))};matchSearch.oninput=filter;statusFilter.onchange=filter}}
+function render(){nav();pageTitle.textContent=navItems.find(x=>x[0]===current)[2];content.innerHTML=current==='home'?dashboard():current==='matches'?matchesView():current==='tournaments'?tournamentsView():current==='courts'?courtsView():current==='clients'?clientsView():current==='referees'?refereesView():current==='observers'?observersView():current==='settlements'?settlementsView():financeView();document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>{current=b.dataset.go;render()});if(current==='matches'){const filter=()=>{const q=matchSearch.value.toLowerCase(),s=statusFilter.value;matchTable.innerHTML=matchCards(data.matches.filter(m=>(!s||m.status===s)&&JSON.stringify(m).toLowerCase().includes(q)))};matchSearch.oninput=filter;statusFilter.onchange=filter}}
 
 let advTouched=false;
 function openModal(){
@@ -161,11 +358,35 @@ function openModal(){
   document.getElementById('referee').innerHTML='<option value="">Sin asignar</option>'+data.referees.map(r=>`<option value="${r.id}">${esc(r.name)}</option>`).join('');
   document.getElementById('tournament').innerHTML='<option value="">Partido independiente</option>'+data.tournaments.map(t=>`<option value="${t.id}">${esc(t.name)}</option>`).join('');
   document.getElementById('observer').innerHTML='<option value="">Sin asignar</option>'+data.observers.map(o=>`<option value="${o.id}">${esc(o.name)}</option>`).join('');
+  courtsList.innerHTML=data.courts.map(c=>`<option value="${esc(c.name)}">`).join('');
+  category.innerHTML='';categoryField.hidden=true;
+  localTeam.innerHTML='';visitorTeam.innerHTML='';localTeamField.hidden=true;visitorTeamField.hidden=true;
+  soloArbitraje.checked=false;arbiterIsObserver.checked=false;arbiterIsObserverField.hidden=true;
+  observerFieldsToggle();
   calcMoney();
 }
 function hideModal(){modal.classList.remove('open')}
 newMatch.onclick=openModal;closeModalBtn.onclick=cancelModal.onclick=hideModal;modal.onclick=e=>{if(e.target===modal)hideModal()};
-document.addEventListener('keydown',e=>{if(e.key==='Escape')[modal,clientModal,refereeModal,tournamentModal,veedorModal].forEach(m=>m.classList.remove('open'))});
+tournament.onchange=onTournamentChange;category.onchange=onCategoryChange;
+soloArbitraje.onchange=observerFieldsToggle;arbiterIsObserver.onchange=observerFieldsToggle;
+function observerFieldsToggle(){const hide=soloArbitraje.checked||arbiterIsObserver.checked;document.getElementById('observer').closest('.field').hidden=hide;document.getElementById('observerFee').closest('.field').hidden=hide}
+function onTournamentChange(){
+  const t=data.tournaments.find(x=>x.id===tournament.value);
+  if(t&&t.categories.length){categoryField.hidden=false;category.innerHTML='<option value="">Elige una categoría…</option>'+t.categories.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('')}
+  else{categoryField.hidden=true;category.innerHTML=''}
+  if(t&&t.teams.length){localTeamField.hidden=false;visitorTeamField.hidden=false;const opts='<option value="">Elige un equipo…</option>'+t.teams.map(tm=>`<option value="${tm.id}">${esc(tm.name)}</option>`).join('');localTeam.innerHTML=opts;visitorTeam.innerHTML=opts}
+  else{localTeamField.hidden=true;visitorTeamField.hidden=true;localTeam.innerHTML='';visitorTeam.innerHTML=''}
+  arbiterIsObserverField.hidden=!(t&&t.categories.length);
+  onCategoryChange();
+}
+function onCategoryChange(){
+  const t=data.tournaments.find(x=>x.id===tournament.value);
+  const cat=t&&t.categories.find(c=>c.id===category.value);
+  const rate=cat&&cat.rate;
+  if(rate){service.value=rate.team_fee*2;refPay.value=rate.referee_fee;observerFee.value=rate.observer_fee;advTouched=false;toSilbatazo.value=rate.silbatazo_fee;toRef.value=rate.referee_fee;paidRef.value=0}
+  calcMoney();
+}
+document.addEventListener('keydown',e=>{if(e.key==='Escape')[modal,clientModal,refereeModal,tournamentModal,veedorModal,courtModal].forEach(m=>m.classList.remove('open'))});
 advToggle.onclick=()=>{advPanel.hidden=!advPanel.hidden;advToggle.textContent=advPanel.hidden?'Ajustar quién le paga a quién ↓':'Ocultar ajuste ↑'};
 ['toSilbatazo','toRef','paidRef'].forEach(id=>document.getElementById(id).addEventListener('input',()=>advTouched=true));
 function calcMoney(){const s=+service.value||0,r=+refPay.value||0;if(!advTouched){const half=Math.round(s/2/1000)*1000;toSilbatazo.value=half;toRef.value=s-half}const si=+toSilbatazo.value||0,tr=+toRef.value||0,pr=+paidRef.value||0;profitCalc.textContent=money(s-r);debtCalc.textContent=money(Math.max(0,r-tr-pr));clientDebtCalc.textContent=money(Math.max(0,s-si-tr))}['service','refPay','toSilbatazo','toRef','paidRef'].forEach(id=>document.getElementById(id).addEventListener('input',calcMoney));
@@ -174,18 +395,51 @@ matchForm.onsubmit=async e=>{
   e.preventDefault();
   const f=Object.fromEntries(new FormData(matchForm));
   const saveBtn=matchForm.querySelector('.save');saveBtn.disabled=true;saveBtn.textContent='Guardando…';
+
+  const placeName=f.place.trim();
+  let courtId=null;
+  if(placeName){
+    const existing=data.courts.find(c=>c.name.toLowerCase()===placeName.toLowerCase());
+    if(existing){courtId=existing.id}
+    else{const {data:newCourt,error:courtErr}=await sb.from('courts').insert({name:placeName}).select().single();if(!courtErr&&newCourt)courtId=newCourt.id}
+  }
+
+  const tour=data.tournaments.find(x=>x.id===f.tournament);
+  const categoryId=category.value||null;
+  const cat=categoryId&&tour?tour.categories.find(c=>c.id===categoryId):null;
+  const rate=cat&&cat.rate;
+  const isSolo=soloArbitraje.checked,isArbObserver=arbiterIsObserver.checked;
+
+  let teamFeeSnap=0,silbatazoFeeSnap=0,tournamentFeeSnap=0,serviceValue=+f.service||0,officialsTotal=+f.refPay||0,matchName=f.name,observerAgreedValue=+f.observerFee||0;
+  if(rate){
+    teamFeeSnap=rate.team_fee;officialsTotal=rate.referee_fee;serviceValue=rate.team_fee*2;observerAgreedValue=rate.observer_fee;
+    if(isSolo){silbatazoFeeSnap=Math.max(0,serviceValue-officialsTotal);tournamentFeeSnap=0}
+    else if(isArbObserver){
+      const silPct=(tour.arbiter_observer_split_silbatazo_pct??50)/100,torPct=(tour.arbiter_observer_split_tournament_pct??50)/100;
+      silbatazoFeeSnap=rate.silbatazo_fee+Math.round(rate.observer_fee*silPct);tournamentFeeSnap=rate.tournament_fee+Math.round(rate.observer_fee*torPct);
+    } else {silbatazoFeeSnap=rate.silbatazo_fee;tournamentFeeSnap=rate.tournament_fee}
+    if(localTeam.value&&visitorTeam.value){
+      const lt=data.teams.find(t=>t.id===localTeam.value),vt=data.teams.find(t=>t.id===visitorTeam.value);
+      if(lt&&vt)matchName=`${lt.name} vs ${vt.name}`;
+    }
+  }
+
   const payload={
-    name:f.name,match_date:f.date,match_time:f.time,place:f.place,match_type:f.type,status:f.status,
+    name:matchName,match_date:f.date,match_time:f.time,place:placeName,match_type:f.type,status:f.status,
     client_id:f.client||null,tournament_id:f.tournament||null,
-    service_value:+f.service||0,officials_total:+f.refPay||0,
+    service_value:serviceValue,officials_total:officialsTotal,
     client_to_silbatazo:+f.toSilbatazo||0,client_to_officials:+f.toRef||0,silbatazo_to_officials:+f.paidRef||0,
     notes:f.notes||null,created_by:currentUser.id,
+    court_id:courtId,category_id:categoryId,
+    local_team_id:localTeam.value||null,visitor_team_id:visitorTeam.value||null,
+    service_type:isSolo?'solo_arbitraje':'completo',arbiter_is_observer:isArbObserver,
+    team_fee:teamFeeSnap,silbatazo_fee:silbatazoFeeSnap,tournament_fee:tournamentFeeSnap,
   };
   const {data:inserted,error}=await sb.from('matches').insert(payload).select().single();
   if(error){toastMsg('No se pudo guardar el partido.');saveBtn.disabled=false;saveBtn.textContent='Guardar partido';return}
   const matchId=inserted.id;
-  if(f.referee){await sb.from('match_officials').insert({match_id:matchId,referee_id:f.referee,role:'central',agreed_value:+f.refPay||0})}
-  if(f.observer){await sb.from('match_observers').insert({match_id:matchId,observer_id:f.observer,agreed_value:+f.observerFee||0})}
+  if(f.referee){await sb.from('match_officials').insert({match_id:matchId,referee_id:f.referee,role:'central',agreed_value:officialsTotal})}
+  if(f.observer&&!isArbObserver&&!isSolo){await sb.from('match_observers').insert({match_id:matchId,observer_id:f.observer,agreed_value:observerAgreedValue})}
   saveBtn.disabled=false;saveBtn.textContent='Guardar partido';
   hideModal();matchForm.reset();toastMsg('Partido guardado correctamente');current='matches';
   await loadAll();render();
