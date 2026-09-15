@@ -233,7 +233,8 @@ create policy "admins settlement_matches" on public.settlement_matches for all u
 -- por W y el desglose financiero (cobrar por equipo / transferir a
 -- Silbatazo / transferir al torneo) que pide la vista del veedor.
 -- ============================================================
-create or replace function public.my_assigned_matches()
+drop function if exists public.my_assigned_matches();
+create function public.my_assigned_matches()
 returns table (
   match_id uuid,
   match_name text,
