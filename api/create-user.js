@@ -1,8 +1,9 @@
-// POST /api/create-veedor
-// Crea el login de un veedor nuevo: usuario en Supabase Auth, su perfil
-// (profiles.role = 'veedor') y su ficha de veedor (observers). Solo lo
-// puede ejecutar un administrador con sesión válida — se verifica su
-// token contra Supabase antes de hacer nada (ver paso 1 más abajo).
+// POST /api/create-user
+// Crea el login de un usuario nuevo: usuario en Supabase Auth + su perfil
+// (profiles.role = 'admin' | 'veedor'). Si es veedor, también crea su
+// ficha en observers. Solo lo puede ejecutar un administrador con sesión
+// válida — se verifica su token contra Supabase antes de hacer nada (ver
+// paso 1 más abajo).
 //
 // Variables de entorno requeridas (Vercel, nunca en el repo):
 //   SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY
@@ -12,10 +13,12 @@
 // por eso el primer paso confirma "quién llama" usando SU PROPIO token
 // (no la service key), para que las políticas RLS decidan si es admin.
 //
-// Body esperado: { name, phone?, email, password? }
+// Body esperado: { name, phone?, email, password?, role? } — role es
+// 'admin' o 'veedor' (default 'veedor').
 // Si no mandas password, se genera una fácil de dictar por WhatsApp.
-// Respuesta: { ok:true, email, password } — el admin se la comparte al
-// veedor (puede cambiarla después; eso no lo cubre esta función todavía).
+// Respuesta: { ok:true, email, password, role } — el admin se la comparte
+// al usuario nuevo (puede cambiarla después; eso no lo cubre esta función
+// todavía).
 
 function randomPassword() {
   const chars = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // sin 0/O/1/I/L, para no confundir al dictarla
@@ -80,14 +83,15 @@ module.exports = async (req, res) => {
       return;
     }
 
-    // 2) Datos del veedor nuevo
+    // 2) Datos del usuario nuevo
     const body = req.body && typeof req.body === 'object' ? req.body : JSON.parse(req.body || '{}');
     const name = (body.name || '').trim();
     const phone = (body.phone || '').trim();
     const email = (body.email || '').trim().toLowerCase();
     const password = (body.password || '').trim() || randomPassword();
+    const role = body.role === 'admin' ? 'admin' : 'veedor';
     if (!name || !email) {
-      res.status(400).json({ ok: false, error: 'Falta el nombre o el correo del veedor.' });
+      res.status(400).json({ ok: false, error: 'Falta el nombre o el correo.' });
       return;
     }
 
@@ -109,11 +113,13 @@ module.exports = async (req, res) => {
     }
     const userId = created.id || (created.user && created.user.id);
 
-    // 4) Perfil + ficha de veedor (con service key, sin pasar por RLS)
-    await supabaseRestInsert(url, serviceKey, 'profiles', { id: userId, full_name: name, role: 'veedor' });
-    await supabaseRestInsert(url, serviceKey, 'observers', { profile_id: userId, name, phone: phone || null });
+    // 4) Perfil (+ ficha de veedor si aplica) — con service key, sin pasar por RLS
+    await supabaseRestInsert(url, serviceKey, 'profiles', { id: userId, full_name: name, role });
+    if (role === 'veedor') {
+      await supabaseRestInsert(url, serviceKey, 'observers', { profile_id: userId, name, phone: phone || null });
+    }
 
-    res.status(200).json({ ok: true, email, password });
+    res.status(200).json({ ok: true, email, password, role });
   } catch (err) {
     res.status(500).json({ ok: false, error: String(err && err.message ? err.message : err) });
   }

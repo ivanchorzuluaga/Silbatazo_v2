@@ -24,7 +24,7 @@
 </head>
 <body>
 <div class="app">
-  <aside class="side"><img class="side-logo" src="assets/logos/logo-completo.png" alt="Silbatazo"><nav class="nav" id="desktopNav"></nav><div class="side-foot"><div class="user"><span class="avatar" id="userAvatar">A</span><div><b id="userName">Administrador</b><small>Equipo Silbatazo</small></div></div><a class="public" href="/">← Volver a la web pública</a><button class="logout" id="logoutBtn" type="button">Cerrar sesión</button></div></aside>
+  <aside class="side"><img class="side-logo" src="assets/logos/logo-completo.png" alt="Silbatazo"><nav class="nav" id="desktopNav"></nav><div class="side-foot"><div class="user"><span class="avatar" id="userAvatar">A</span><div><b id="userName">Administrador</b><small>Equipo Silbatazo</small></div></div><a class="public" href="/">← Volver a la web pública</a><button class="logout" id="addAdminBtn" type="button">+ Agregar administrador</button><button class="logout" id="logoutBtn" type="button">Cerrar sesión</button></div></aside>
   <main class="main"><header class="topbar"><div><h1 id="pageTitle">Inicio</h1><span class="today" id="today"></span></div><div class="topbar-actions"><button class="new" id="newMatch">+ Nuevo partido</button></div></header><div class="content" id="content"></div></main>
 </div>
 <nav class="mobile-nav" id="mobileNav"></nav>
@@ -77,6 +77,14 @@
   <div class="field"><label for="veedorEmail">Correo (para el login)</label><input id="veedorEmail" name="email" type="email" required></div>
 </div><div class="actions"><button type="button" class="ghost" id="cancelVeedorModal">Cancelar</button><button class="save" type="submit">Guardar</button></div></form>
 <div class="form" id="veedorResult" hidden></div>
+</div></div>
+
+<div class="modal" id="adminModal"><div class="dialog"><div class="dialog-head"><h2>Nuevo administrador</h2><button class="close" id="closeAdminModal" type="button">×</button></div>
+<form class="form" id="adminForm"><div class="form-grid">
+  <div class="field full"><label for="adminName">Nombre</label><input id="adminName" name="name" required></div>
+  <div class="field full"><label for="adminEmail">Correo (para el login)</label><input id="adminEmail" name="email" type="email" required></div>
+</div><div class="actions"><button type="button" class="ghost" id="cancelAdminModal">Cancelar</button><button class="save" type="submit">Guardar</button></div></form>
+<div class="form" id="adminResult" hidden></div>
 </div></div>
 
 <div class="modal" id="courtModal"><div class="dialog"><div class="dialog-head"><h2>Nueva cancha</h2><button class="close" id="closeCourtModal" type="button">×</button></div><form class="form" id="courtForm"><div class="form-grid">
@@ -646,7 +654,7 @@ function editMatch(id){
   suppressAutofill=false;
   calcMoney();
 }
-document.addEventListener('keydown',e=>{if(e.key==='Escape')[modal,clientModal,refereeModal,tournamentModal,veedorModal,courtModal].forEach(m=>m.classList.remove('open'))});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')[modal,clientModal,refereeModal,tournamentModal,veedorModal,courtModal,adminModal].forEach(m=>m.classList.remove('open'))});
 advToggle.onclick=()=>{advPanel.hidden=!advPanel.hidden;advToggle.textContent=advPanel.hidden?'Ajustar quién le paga a quién ↓':'Ocultar ajuste ↑'};
 ['toSilbatazo','toRef','paidRef'].forEach(id=>document.getElementById(id).addEventListener('input',()=>advTouched=true));
 function calcMoney(){const s=+service.value||0,r=+refPay.value||0;if(!advTouched){const half=Math.round(s/2/1000)*1000;toSilbatazo.value=half;toRef.value=s-half}const si=+toSilbatazo.value||0,tr=+toRef.value||0,pr=+paidRef.value||0;profitCalc.textContent=money(s-r);debtCalc.textContent=money(Math.max(0,r-tr-pr));clientDebtCalc.textContent=money(Math.max(0,s-si-tr))}['service','refPay','toSilbatazo','toRef','paidRef'].forEach(id=>document.getElementById(id).addEventListener('input',calcMoney));
@@ -742,7 +750,7 @@ veedorForm.onsubmit=async e=>{
   const btn=veedorForm.querySelector('.save');btn.disabled=true;btn.textContent='Creando…';
   try{
     const {data:{session}}=await sb.auth.getSession();
-    const res=await fetch('/api/create-veedor',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+session.access_token},body:JSON.stringify({name:f.name,phone:f.phone,email:f.email})});
+    const res=await fetch('/api/create-user',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+session.access_token},body:JSON.stringify({name:f.name,phone:f.phone,email:f.email,role:'veedor'})});
     const out=await res.json();
     btn.disabled=false;btn.textContent='Guardar';
     if(!out.ok){toastMsg(out.error||'No se pudo crear el veedor.');return}
@@ -750,6 +758,24 @@ veedorForm.onsubmit=async e=>{
     veedorResult.innerHTML=`<p>Veedor creado. Comparte estos datos por WhatsApp:</p><p><b>Correo:</b> ${esc(out.email)}<br><b>Contraseña:</b> ${esc(out.password)}</p><p style="color:#8b929b;font-size:.85rem">La puede cambiar más adelante; por ahora entra con esta en veedor.html.</p>`;
     await loadAll();
   }catch(err){btn.disabled=false;btn.textContent='Guardar';toastMsg('No se pudo crear el veedor.')}
+};
+
+function openAdminModal(){adminModal.classList.add('open');adminForm.reset();adminForm.hidden=false;adminResult.hidden=true;adminResult.innerHTML=''}
+function hideAdminModal(){adminModal.classList.remove('open')}
+addAdminBtn.onclick=openAdminModal;closeAdminModal.onclick=cancelAdminModal.onclick=hideAdminModal;adminModal.onclick=e=>{if(e.target===adminModal)hideAdminModal()};
+adminForm.onsubmit=async e=>{
+  e.preventDefault();
+  const f=Object.fromEntries(new FormData(adminForm));
+  const btn=adminForm.querySelector('.save');btn.disabled=true;btn.textContent='Creando…';
+  try{
+    const {data:{session}}=await sb.auth.getSession();
+    const res=await fetch('/api/create-user',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+session.access_token},body:JSON.stringify({name:f.name,email:f.email,role:'admin'})});
+    const out=await res.json();
+    btn.disabled=false;btn.textContent='Guardar';
+    if(!out.ok){toastMsg(out.error||'No se pudo crear el administrador.');return}
+    adminForm.hidden=true;adminResult.hidden=false;
+    adminResult.innerHTML=`<p>Administrador creado. Comparte estos datos de forma segura (no por un canal público):</p><p><b>Correo:</b> ${esc(out.email)}<br><b>Contraseña:</b> ${esc(out.password)}</p><p style="color:#8b929b;font-size:.85rem">La puede cambiar más adelante; por ahora entra con esta en admin.html.</p>`;
+  }catch(err){btn.disabled=false;btn.textContent='Guardar';toastMsg('No se pudo crear el administrador.')}
 };
 
 logoutBtn.onclick=async()=>{await SilbatazoAuth.signOut();window.location.reload()};
