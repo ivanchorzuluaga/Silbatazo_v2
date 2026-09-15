@@ -6,3 +6,4 @@ Thumbs.db
 .claude/
 .vercel
 supabase/.temp/
+.env*
