@@ -1,57 +1,56 @@
 # Puesta en producción de Silbatazo Gestión
 
-## Arquitectura recomendada
+**Estado: ya está en producción.** Este documento queda como referencia de cómo se montó y qué falta; para el contexto vigente del sistema (esquema, reglas de negocio, convenciones) ver `CLAUDE.md`.
 
-- **Frontend y dominio:** conservar el proyecto actual de Vercel.
-- **Base de datos y autenticación:** Supabase (PostgreSQL + Auth).
+## Arquitectura real (ya montada)
+
+- **Frontend y dominio:** proyecto de Vercel **`arbi-app-frontend`** (nombre heredado de una versión anterior en Vite — no se renombró), dominio de producción **`silbatazo.com`**. Framework Preset en "Other" (sitio estático, sin build), conectado por Git al repo de GitHub — cada `git push` a `main` despliega solo.
+- **Base de datos y autenticación:** Supabase, proyecto **`Silbatazo_v2`** (ref `llilwqlqgbronvbsffav`, región `us-east-1`).
 - **Código:** repositorio privado `ivanchorzuluaga/Silbatazo_v2`.
-- **Usuarios:** solo los tres administradores, creados manualmente.
+- **Usuarios:** los administradores del equipo Silbatazo, creados manualmente en Supabase Auth + una fila en `profiles` con `role='admin'`.
 
-## 1. Crear Supabase
+## 1. Supabase (ya hecho)
 
-1. Crear un proyecto en Supabase, eligiendo una región cercana.
-2. Guardar la contraseña de base de datos en un gestor de contraseñas.
-3. Abrir **SQL Editor**, pegar `supabase/schema.sql` y ejecutarlo.
-4. En **Authentication → Users**, crear los tres usuarios administrativos.
-5. Copiar el UUID de cada usuario y crear su perfil:
-
-```sql
-insert into public.profiles (id, full_name)
-values ('UUID-DEL-USUARIO', 'Nombre del administrador');
+El esquema completo (`schema.sql` + `002` + `003` + `004`, en ese orden) ya está aplicado contra el proyecto real. Para aplicar una migración nueva:
 ```
+supabase login              # una vez por máquina/sesión (abre el navegador)
+supabase link --project-ref llilwqlqgbronvbsffav
+supabase db query --linked --file supabase/00N_descripcion.sql
+```
+No hace falta pegar nada a mano en el SQL Editor ni conocer la contraseña de Postgres — el CLI habla con la Management API usando el token de `supabase login`.
 
-6. En **Authentication → URL Configuration**, agregar el dominio de producción de Vercel y sus URLs de redirección.
+Para agregar un admin nuevo: crearlo en **Authentication → Users** (Supabase dashboard) con "Auto Confirm User", y luego:
+```sql
+insert into public.profiles (id, full_name, role)
+select id, 'Nombre del administrador', 'admin' from auth.users where email = 'correo@ejemplo.com';
+```
+(se puede correr con `supabase db query --linked "..."`, sin tocar el dashboard).
 
-## 2. Conectar Vercel
+## 2. Vercel (ya hecho)
 
-1. Importar o actualizar el proyecto usando el repositorio de GitHub.
-2. En **Settings → Environment Variables**, crear:
-   - `SUPABASE_URL`
-   - `SUPABASE_ANON_KEY`
-   - `SUPABASE_SERVICE_ROLE_KEY` (Settings → API → "service_role" en Supabase — **nunca** se usa en el navegador; solo la leen las funciones serverless de `/api`, como `create-veedor.js`)
-3. Aplicarlas a Production y Preview.
-4. Hacer un nuevo despliegue; los cambios de variables no afectan despliegues anteriores.
+Las tres variables ya están puestas en el proyecto `arbi-app-frontend` (Settings → Environment Variables), solo en **Production**:
+- `SUPABASE_URL` = `https://llilwqlqgbronvbsffav.supabase.co`
+- `SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY` (**nunca** se usa en el navegador; solo la leen las funciones serverless de `/api`, como `create-veedor.js`)
 
-Nota: este sitio no tiene paso de build (no Vite), así que estas variables no se inyectan en el HTML directamente. `admin.html` y `veedor.html` piden la URL y la anon key al cargar a través de `/api/config` (una función serverless que simplemente las lee del entorno) — por eso el prefijo `VITE_` de versiones anteriores de este archivo ya no aplica.
+Si se quiere probar con `vercel deploy` (preview, sin `--prod`) antes de promover a producción, hay que agregar las mismas tres también a **Preview**/**Development** — hoy no están ahí.
 
-## 3. Antes de usar datos reales
+Nota: este sitio no tiene paso de build, así que estas variables no se inyectan en el HTML directamente. `admin.html` y `veedor.html` piden la URL y la anon key al cargar a través de `/api/config` (una función serverless que simplemente las lee del entorno).
 
-- Confirmar que un usuario sin sesión no puede leer ni modificar tablas.
-- Probar creación y edición de clientes, árbitros, torneos y partidos.
-- Probar un partido con central y dos asistentes.
-- Verificar el ejemplo financiero 100.000 / 90.000 / 50.000 / 50.000 / 40.000.
-- Configurar alertas de uso y revisar crecimiento de la base mensualmente.
-- Exportar una copia antes de cambios grandes mientras se use el plan gratuito.
+## 3. Checklist recurrente (repetir tras cambios grandes de esquema o de dinero)
+
+- Confirmar que un usuario sin sesión no puede leer ni modificar tablas (RLS).
+- Probar creación, edición y **eliminación** de clientes, árbitros, torneos, canchas y partidos.
+- Probar un partido con árbitro central + 2 asistentes (categoría con terna arbitral).
+- Verificar la fórmula de liquidación con un caso de cada tipo: partido normal, por W, cancelado (ver ejemplos numéricos verificados en `CLAUDE.md` → "Partido por W").
+- Configurar alertas de uso en Supabase y revisar crecimiento de la base mensualmente.
+- Exportar una copia (`supabase db dump` o desde el dashboard) antes de cambios grandes mientras se use el plan gratuito.
 
 ## 4. Paso recomendado de planes
 
-1. Desarrollo y pruebas: Supabase Free.
+1. Desarrollo y pruebas: Supabase Free (plan actual).
 2. Operación diaria: Supabase Pro para evitar pausas y contar con respaldos automáticos.
 3. Mantener Vercel actual mientras el consumo siga dentro de su plan.
-
-## Pendiente de credenciales
-
-`admin.html` y `veedor.html` ya están escritos para hablar directamente con Supabase (ya no usan almacenamiento local del navegador). Para que funcionen en vivo solo falta que exista el proyecto de Supabase real y que sus llaves estén puestas en Vercel (paso 1 y 2 de arriba) — mientras eso no esté, ambas páginas muestran una pantalla de "sin conexión con el servidor" en vez de fallar en silencio.
 
 ## 5. Galería y testimonios automáticos desde Google Drive
 
@@ -84,7 +83,7 @@ Hay una segunda pantalla, `veedor.html`, con acceso completamente aparte del pan
 Qué puede hacer un veedor desde su celular, por cada partido asignado:
 - Ver cuánta plata debe reunir ese día (según lo acordado por partido).
 - Anotar el marcador final.
-- Registrar las tarjetas: a quién, de qué equipo, amarilla o roja. La multa se calcula sola ($5.000 amarilla, $10.000 roja) — no hay que escribirla.
+- Registrar las tarjetas: a quién, de qué equipo, amarilla o roja. La multa se calcula sola (según la tarifa del torneo/categoría, o $5.000 amarilla / $10.000 roja por defecto si el partido no tiene categoría) — no hay que escribirla.
 - Marcar una tarjeta como pagada cuando el jugador cancela la multa.
 
 Qué ve el administrador (pestaña **Veedores** del panel):
