@@ -77,7 +77,7 @@ COP, enteros, sin decimales. Mostrar con formato `$40.000` (ya lo hace el helper
 ## Convenciones de código
 - Todo vive en `admin.html`/`veedor.html`/`index.html` (landing) + `/api/*.js` + `assets/js/supa.js` — no hay carpetas `/app`, `/components`, `/lib` de Next.js.
 - Nombres de tabla y columna en `snake_case`, **en inglés** (coinciden con el esquema real en `supabase/*.sql`), aunque el negocio y las conversaciones sean en español.
-- Cambios de esquema: agregar un archivo `supabase/00N_descripcion.sql` nuevo (migración incremental) y también reflejarlo al final de `supabase/schema.sql` para que una instalación nueva quede completa en un solo archivo — así se hizo con `002` y `003`. El usuario pega el SQL a mano en el SQL Editor de Supabase (no hay Supabase CLI enlazado).
+- Cambios de esquema: agregar un archivo `supabase/00N_descripcion.sql` nuevo (migración incremental, aditiva). Una instalación nueva corre `schema.sql` y luego cada `00N_*.sql` en orden. El CLI de Supabase (`supabase`) ya está enlazado al proyecto real (`supabase link --project-ref llilwqlqgbronvbsffav`) — los cambios de esquema se aplican con `supabase db query --linked --file supabase/00N_....sql`, no hace falta pegar nada a mano en el SQL Editor.
 
 ## Notas importantes
 - Los árbitros NO usan el sistema, solo reciben WhatsApp.

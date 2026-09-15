@@ -40,6 +40,7 @@
   <div class="field full"><label for="name">Partido / equipos</label><input id="name" name="name" placeholder="Ej. Los del Barrio vs Amigos FC" required></div>
   <div class="section-h">Árbitro</div>
   <div class="field"><label for="referee">Árbitro central</label><select id="referee" name="referee"></select></div><div class="field"><label for="status">Estado</label><select id="status" name="status"><option value="pending">Pendiente de árbitro</option><option value="confirmed">Confirmado</option><option value="finished">Finalizado</option><option value="cancelled">Cancelado</option></select></div>
+  <div class="field" id="assistant1Field" hidden><label for="assistant1">Asistente 1</label><select id="assistant1"></select></div><div class="field" id="assistant2Field" hidden><label for="assistant2">Asistente 2</label><select id="assistant2"></select></div>
   <div class="field full" style="display:flex;align-items:center;gap:10px;flex-direction:row"><input id="soloArbitraje" type="checkbox" style="width:22px;height:22px;min-height:0"><label style="text-transform:none;font-weight:700">Solo arbitraje (sin veedor, sin tarjetas, sin pago a torneo)</label></div>
   <div class="field full" id="arbiterIsObserverField" hidden style="display:flex;align-items:center;gap:10px;flex-direction:row"><input id="arbiterIsObserver" type="checkbox" style="width:22px;height:22px;min-height:0"><label style="text-transform:none;font-weight:700">El árbitro también hace de veedor</label></div>
   <div class="section-h">Veedor</div>
@@ -84,6 +85,7 @@
 
 <div class="toast" id="toast">Guardado</div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="assets/js/supa.js"></script>
 <script>
 const navItems=[['home','⌂','Inicio'],['matches','◫','Partidos'],['tournaments','⚑','Torneos'],['courts','⛳','Canchas'],['clients','◎','Clientes'],['referees','◇','Árbitros'],['observers','👁','Veedores'],['settlements','💰','Liquidaciones'],['finance','$','Finanzas']];
@@ -120,24 +122,66 @@ async function loadAll(){
   buildViewModels();
 }
 
+let ratesByCategory={};
+function getRate(categoryId,courtId){
+  const g=ratesByCategory[categoryId];
+  if(!g)return null;
+  if(courtId&&g.byCourt[courtId])return g.byCourt[courtId];
+  return g.default;
+}
+function resolveCourtId(name){
+  const n=String(name||'').trim().toLowerCase();
+  if(!n)return null;
+  const found=data.courts.find(c=>c.name.toLowerCase()===n);
+  return found?found.id:null;
+}
+// Calcula los valores que quedan grabados en el partido (snapshot de la
+// tarifa al momento de crear/editar) — la usan tanto el formulario de
+// partido como el importador masivo, para no duplicar la lógica de dinero.
+function computeMoneySnapshot(rate,opts){
+  opts=opts||{};
+  let teamFeeSnap=0,silbatazoFeeSnap=0,tournamentFeeSnap=0,serviceValue=0,officialsTotal=0,observerAgreedValue=0;
+  if(rate){
+    teamFeeSnap=rate.team_fee;serviceValue=rate.team_fee*2;
+    officialsTotal=rate.referee_fee+(rate.assistant1_fee||0)+(rate.assistant2_fee||0);
+    observerAgreedValue=rate.observer_fee;
+    if(opts.isSolo){silbatazoFeeSnap=Math.max(0,serviceValue-officialsTotal);tournamentFeeSnap=0}
+    else if(opts.isArbObserver&&opts.tour){
+      const silPct=(opts.tour.arbiter_observer_split_silbatazo_pct??50)/100,torPct=(opts.tour.arbiter_observer_split_tournament_pct??50)/100;
+      silbatazoFeeSnap=rate.silbatazo_fee+Math.round(rate.observer_fee*silPct);tournamentFeeSnap=rate.tournament_fee+Math.round(rate.observer_fee*torPct);
+    } else {silbatazoFeeSnap=rate.silbatazo_fee;tournamentFeeSnap=rate.tournament_fee}
+  }
+  return {teamFeeSnap,silbatazoFeeSnap,tournamentFeeSnap,serviceValue,officialsTotal,observerAgreedValue};
+}
 function buildViewModels(){
   const byId=list=>Object.fromEntries(list.map(x=>[x.id,x]));
   const clientById=byId(raw.clients),tournamentById=byId(raw.tournaments),refereeById=byId(raw.referees),observerById=byId(raw.observers);
   const teamById=byId(raw.teams),courtById=byId(raw.courts),categoryById=byId(raw.categories);
-  const rateByCategory=Object.fromEntries(raw.rates.map(r=>[r.category_id,r]));
-  const centralByMatch={}; raw.match_officials.forEach(o=>{ if(o.role==='central') centralByMatch[o.match_id]=o });
+  ratesByCategory={};
+  raw.rates.forEach(r=>{
+    if(!ratesByCategory[r.category_id])ratesByCategory[r.category_id]={default:null,byCourt:{}};
+    if(r.court_id)ratesByCategory[r.category_id].byCourt[r.court_id]=r;
+    else ratesByCategory[r.category_id].default=r;
+  });
+  const centralByMatch={},assist1ByMatch={},assist2ByMatch={};
+  raw.match_officials.forEach(o=>{
+    if(o.role==='central')centralByMatch[o.match_id]=o;
+    else if(o.role==='assistant_1')assist1ByMatch[o.match_id]=o;
+    else if(o.role==='assistant_2')assist2ByMatch[o.match_id]=o;
+  });
   const obsByMatch=Object.fromEntries(raw.match_observers.map(o=>[o.match_id,o]));
   const pendingByMatch={}; raw.cards.forEach(c=>{ if(!c.paid) pendingByMatch[c.match_id]=(pendingByMatch[c.match_id]||0)+1 });
 
   data.matches=raw.matches.map(m=>{
-    const central=centralByMatch[m.id],obs=obsByMatch[m.id];
+    const central=centralByMatch[m.id],obs=obsByMatch[m.id],a1=assist1ByMatch[m.id],a2=assist2ByMatch[m.id];
     return {
-      id:m.id,date:m.match_date,time:(m.match_time||'').slice(0,5),name:m.name,place:m.place,type:m.match_type,status:m.status,
+      id:m.id,date:m.match_date,time:(m.match_time||'').slice(0,5),name:m.name,place:m.place,type:m.match_type,status:m.status,notes:m.notes||'',
       service:Number(m.service_value)||0,refPay:Number(m.officials_total)||0,
       toSilbatazo:Number(m.client_to_silbatazo)||0,toRef:Number(m.client_to_officials)||0,paidRef:Number(m.silbatazo_to_officials)||0,
       client:m.client_id&&clientById[m.client_id]?clientById[m.client_id].name:'Sin cliente',client_id:m.client_id||'',
       tournament:m.tournament_id&&tournamentById[m.tournament_id]?tournamentById[m.tournament_id].name:'',tournament_id:m.tournament_id||'',
       referee:central&&refereeById[central.referee_id]?refereeById[central.referee_id].name:'Sin asignar',referee_id:central?central.referee_id:'',
+      assistant1_id:a1?a1.referee_id:'',assistant2_id:a2?a2.referee_id:'',
       observer:obs&&observerById[obs.observer_id]?observerById[obs.observer_id].name:'Sin asignar',observer_id:obs?obs.observer_id:'',observerFee:obs?Number(obs.agreed_value)||0:0,
       pendingCards:pendingByMatch[m.id]||0,
       category_id:m.category_id||'',category:m.category_id&&categoryById[m.category_id]?categoryById[m.category_id].name:'',
@@ -158,7 +202,10 @@ function buildViewModels(){
   data.tournaments=raw.tournaments.map(t=>({...t,
     total:data.matches.filter(m=>m.tournament_id===t.id).length,
     played:data.matches.filter(m=>m.tournament_id===t.id&&m.status==='finished').length,
-    categories:raw.categories.filter(c=>c.tournament_id===t.id).map(c=>({...c,rate:rateByCategory[c.id]||null})),
+    categories:raw.categories.filter(c=>c.tournament_id===t.id).map(c=>({...c,
+      rate:(ratesByCategory[c.id]&&ratesByCategory[c.id].default)||null,
+      courtRates:(ratesByCategory[c.id]&&Object.values(ratesByCategory[c.id].byCourt))||[],
+    })),
     teams:raw.teams.filter(tm=>tm.tournament_id===t.id),
   }));
   data.cardsPending=raw.cards.filter(c=>!c.paid).map(c=>({...c,matchName:(c.matches&&c.matches.name)||'',matchDate:(c.matches&&c.matches.match_date)||''}));
@@ -175,8 +222,9 @@ function hideCourtModal(){courtModal.classList.remove('open')}
 closeCourtModal.onclick=cancelCourtModal.onclick=hideCourtModal;courtModal.onclick=e=>{if(e.target===courtModal)hideCourtModal()};
 courtForm.onsubmit=async e=>{e.preventDefault();const f=Object.fromEntries(new FormData(courtForm));const btn=courtForm.querySelector('.save');btn.disabled=true;btn.textContent='Guardando…';const {error}=await sb.from('courts').insert({name:f.name});btn.disabled=false;btn.textContent='Guardar';if(error){toastMsg('No se pudo guardar la cancha.');return}hideCourtModal();courtForm.reset();toastMsg('Cancha guardada.');await loadAll();render()};
 
-function categoriesRows(t){return t.categories.length?t.categories.map(c=>{const r=c.rate;return `<div class="mcard"><div class="who"><b>${esc(c.name)}</b><span class="meta">${r?`Equipo ${money(r.team_fee)} · Árbitro ${money(r.referee_fee)} · Veedor ${money(r.observer_fee)} · Silbatazo ${money(r.silbatazo_fee)} · Torneo ${money(r.tournament_fee)} · 🟨${money(r.yellow_fee)} 🟥${money(r.red_fee)}`:'Sin tarifa configurada'}</span></div><button class="link-btn" onclick="deleteCategory('${c.id}','${t.id}')">Eliminar</button></div>`}).join(''):'<div class="empty">Todavía no hay categorías.</div>'}
+function categoriesRows(t){return t.categories.length?t.categories.map(c=>{const r=c.rate;return `<div class="mcard"><div class="who"><b>${esc(c.name)}</b><span class="meta">${r?`Equipo ${money(r.team_fee)} · Árbitro ${money(r.referee_fee)}${r.assistant1_fee?' · Asist.1 '+money(r.assistant1_fee):''}${r.assistant2_fee?' · Asist.2 '+money(r.assistant2_fee):''} · Veedor ${money(r.observer_fee)} · Silbatazo ${money(r.silbatazo_fee)} · Torneo ${money(r.tournament_fee)} · 🟨${money(r.yellow_fee)} 🟥${money(r.red_fee)}`:'Sin tarifa configurada'}</span></div><button class="link-btn" onclick="deleteCategory('${c.id}','${t.id}')">Eliminar</button></div>`}).join(''):'<div class="empty">Todavía no hay categorías.</div>'}
 function teamsRows(t){return t.teams.length?t.teams.map(tm=>`<div class="mcard"><div class="who"><b>${esc(tm.name)}</b></div><button class="link-btn" onclick="deleteTeam('${tm.id}','${t.id}')">Eliminar</button></div>`).join(''):'<div class="empty">Todavía no hay equipos.</div>'}
+function courtRatesRows(t){const rows=t.categories.flatMap(c=>c.courtRates.map(r=>({...r,categoryName:c.name})));return rows.length?rows.map(r=>{const courtName=(data.courts.find(x=>x.id===r.court_id)||{}).name||'Cancha';return `<div class="mcard"><div class="who"><b>${esc(r.categoryName)} · ${esc(courtName)}</b><span class="meta">Árbitro ${money(r.referee_fee)}${r.assistant1_fee?' · Asist.1 '+money(r.assistant1_fee):''}${r.assistant2_fee?' · Asist.2 '+money(r.assistant2_fee):''} · Veedor ${money(r.observer_fee)} · Silbatazo ${money(r.silbatazo_fee)} · Torneo ${money(r.tournament_fee)}</span></div><button class="link-btn" onclick="deleteCourtRate('${r.id}','${t.id}')">Eliminar</button></div>`}).join(''):'<div class="empty">Sin excepciones — todas las canchas usan la tarifa por defecto de cada categoría.</div>'}
 
 function openTournamentConfig(id){
   const t=data.tournaments.find(x=>x.id===id);
@@ -193,6 +241,8 @@ function openTournamentConfig(id){
       <div class="field"><label for="catName">Nombre</label><input id="catName" required placeholder="Ej. Sub-14"></div>
       <div class="field"><label for="catTeamFee">Valor por equipo</label><input id="catTeamFee" type="number" min="0" step="1000" value="40000"></div>
       <div class="field"><label for="catRefFee">Valor árbitro</label><input id="catRefFee" type="number" min="0" step="1000" value="35000"></div>
+      <div class="field"><label for="catAsist1Fee">Valor asistente 1 (0 si no aplica)</label><input id="catAsist1Fee" type="number" min="0" step="1000" value="0"></div>
+      <div class="field"><label for="catAsist2Fee">Valor asistente 2 (0 si no aplica)</label><input id="catAsist2Fee" type="number" min="0" step="1000" value="0"></div>
       <div class="field"><label for="catObsFee">Valor veedor</label><input id="catObsFee" type="number" min="0" step="1000" value="15000"></div>
       <div class="field"><label for="catSilFee">Valor Silbatazo</label><input id="catSilFee" type="number" min="0" step="1000" value="20000"></div>
       <div class="field"><label for="catTorFee">Valor torneo</label><input id="catTorFee" type="number" min="0" step="1000" value="10000"></div>
@@ -206,18 +256,32 @@ function openTournamentConfig(id){
       <div class="field"><label for="catRedTor">Roja — torneo</label><input id="catRedTor" type="number" min="0" step="500" value="4000"></div>
     </div><div class="actions"><button class="save" type="submit">+ Agregar categoría</button></div></form>
   </div>
+  <div class="box"><div class="box-head"><h3>Excepciones de tarifa por cancha</h3></div><p style="padding:0 20px;color:#8b929b">Si en una cancha específica se paga distinto (por ejemplo más transporte para el árbitro), agrégala aquí. Si no, todas usan la tarifa por defecto de la categoría.</p><div id="courtRatesList">${courtRatesRows(t)}</div>
+    <form class="form" id="courtRateForm" data-tournament="${id}"><div class="form-grid">
+      <div class="section-h">Nueva excepción</div>
+      <div class="field"><label for="crCategory">Categoría</label><select id="crCategory">${t.categories.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('')||'<option value="">Crea una categoría primero</option>'}</select></div>
+      <div class="field"><label for="crCourt">Cancha</label><select id="crCourt">${data.courts.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('')||'<option value="">Crea una cancha primero</option>'}</select></div>
+      <div class="field"><label for="crRefFee">Valor árbitro</label><input id="crRefFee" type="number" min="0" step="1000" value="0"></div>
+      <div class="field"><label for="crAsist1Fee">Valor asistente 1</label><input id="crAsist1Fee" type="number" min="0" step="1000" value="0"></div>
+      <div class="field"><label for="crAsist2Fee">Valor asistente 2</label><input id="crAsist2Fee" type="number" min="0" step="1000" value="0"></div>
+      <div class="field"><label for="crObsFee">Valor veedor</label><input id="crObsFee" type="number" min="0" step="1000" value="0"></div>
+      <div class="field"><label for="crSilFee">Valor Silbatazo</label><input id="crSilFee" type="number" min="0" step="1000" value="0"></div>
+      <div class="field"><label for="crTorFee">Valor torneo</label><input id="crTorFee" type="number" min="0" step="1000" value="0"></div>
+    </div><div class="actions"><button class="save" type="submit">+ Agregar excepción</button></div></form>
+  </div>
   <div class="box"><div class="box-head"><h3>Equipos</h3></div><div id="teamsList" class="match-list">${teamsRows(t)}</div>
     <form class="form" id="teamsForm" data-tournament="${id}"><div class="field full"><label for="teamsBulk">Agregar equipos (uno por línea)</label><textarea id="teamsBulk" rows="4" placeholder="Los del Barrio&#10;Amigos FC"></textarea></div><div class="actions"><button class="save" type="submit">+ Agregar equipos</button></div></form>
   </div>`;
   pageTitle.textContent=t.name;
   tournamentRulesForm.onsubmit=saveTournamentRules;
   categoryForm.onsubmit=saveCategoryRate;
+  courtRateForm.onsubmit=saveCourtRate;
   teamsForm.onsubmit=saveTeamsBulk;
-  ['catTeamFee','catRefFee','catObsFee','catSilFee','catTorFee'].forEach(id=>document.getElementById(id).addEventListener('input',updateCatSumHint));
+  ['catTeamFee','catRefFee','catAsist1Fee','catAsist2Fee','catObsFee','catSilFee','catTorFee'].forEach(id=>document.getElementById(id).addEventListener('input',updateCatSumHint));
   updateCatSumHint();
 }
 function updateCatSumHint(){
-  const teamFee=+catTeamFee.value||0,sum=(+catRefFee.value||0)+(+catObsFee.value||0)+(+catSilFee.value||0)+(+catTorFee.value||0),expected=teamFee*2;
+  const teamFee=+catTeamFee.value||0,sum=(+catRefFee.value||0)+(+catAsist1Fee.value||0)+(+catAsist2Fee.value||0)+(+catObsFee.value||0)+(+catSilFee.value||0)+(+catTorFee.value||0),expected=teamFee*2;
   catSumHint.textContent=sum===expected?`✓ La suma cuadra: ${money(sum)}`:`⚠ La suma (${money(sum)}) debería ser ${money(expected)} (valor por equipo × 2)`;
 }
 async function saveTournamentRules(e){
@@ -235,7 +299,7 @@ async function saveCategoryRate(e){
   const btn=categoryForm.querySelector('.save');btn.disabled=true;btn.textContent='Guardando…';
   const {data:cat,error}=await sb.from('tournament_categories').insert({tournament_id:tournamentId,name:catName.value.trim()}).select().single();
   if(error){btn.disabled=false;btn.textContent='+ Agregar categoría';toastMsg('No se pudo crear la categoría (¿nombre repetido?).');return}
-  const {error:rateError}=await sb.from('rates').insert({tournament_id:tournamentId,category_id:cat.id,team_fee:+catTeamFee.value||0,referee_fee:+catRefFee.value||0,observer_fee:+catObsFee.value||0,silbatazo_fee:+catSilFee.value||0,tournament_fee:+catTorFee.value||0,yellow_fee:+catYellow.value||0,yellow_silbatazo:+catYellowSil.value||0,yellow_tournament:+catYellowTor.value||0,red_fee:+catRed.value||0,red_silbatazo:+catRedSil.value||0,red_tournament:+catRedTor.value||0});
+  const {error:rateError}=await sb.from('rates').insert({tournament_id:tournamentId,category_id:cat.id,team_fee:+catTeamFee.value||0,referee_fee:+catRefFee.value||0,assistant1_fee:+catAsist1Fee.value||0,assistant2_fee:+catAsist2Fee.value||0,observer_fee:+catObsFee.value||0,silbatazo_fee:+catSilFee.value||0,tournament_fee:+catTorFee.value||0,yellow_fee:+catYellow.value||0,yellow_silbatazo:+catYellowSil.value||0,yellow_tournament:+catYellowTor.value||0,red_fee:+catRed.value||0,red_silbatazo:+catRedSil.value||0,red_tournament:+catRedTor.value||0});
   btn.disabled=false;btn.textContent='+ Agregar categoría';
   if(rateError){toastMsg('La categoría se creó pero falló la tarifa: '+rateError.message);await loadAll();openTournamentConfig(tournamentId);return}
   toastMsg('Categoría y tarifa guardadas.');await loadAll();openTournamentConfig(tournamentId);
@@ -245,6 +309,25 @@ async function deleteCategory(id,tournamentId){
   const {error}=await sb.from('tournament_categories').delete().eq('id',id);
   if(error){toastMsg('No se pudo eliminar (puede tener partidos asociados).');return}
   toastMsg('Categoría eliminada.');await loadAll();openTournamentConfig(tournamentId);
+}
+async function saveCourtRate(e){
+  e.preventDefault();
+  const tournamentId=courtRateForm.dataset.tournament;
+  const t=data.tournaments.find(x=>x.id===tournamentId);
+  const cat=t.categories.find(c=>c.id===crCategory.value);
+  if(!cat){toastMsg('Elige una categoría.');return}
+  if(!crCourt.value){toastMsg('Elige una cancha.');return}
+  const btn=courtRateForm.querySelector('.save');btn.disabled=true;btn.textContent='Guardando…';
+  const {error}=await sb.from('rates').insert({tournament_id:tournamentId,category_id:cat.id,court_id:crCourt.value,team_fee:cat.rate?cat.rate.team_fee:0,referee_fee:+crRefFee.value||0,assistant1_fee:+crAsist1Fee.value||0,assistant2_fee:+crAsist2Fee.value||0,observer_fee:+crObsFee.value||0,silbatazo_fee:+crSilFee.value||0,tournament_fee:+crTorFee.value||0});
+  btn.disabled=false;btn.textContent='+ Agregar excepción';
+  if(error){toastMsg('No se pudo guardar (¿ya existe una excepción para esa categoría y cancha?).');return}
+  toastMsg('Excepción de tarifa guardada.');await loadAll();openTournamentConfig(tournamentId);
+}
+async function deleteCourtRate(id,tournamentId){
+  if(!confirm('¿Eliminar esta excepción de tarifa?'))return;
+  const {error}=await sb.from('rates').delete().eq('id',id);
+  if(error){toastMsg('No se pudo eliminar.');return}
+  toastMsg('Excepción eliminada.');await loadAll();openTournamentConfig(tournamentId);
 }
 async function saveTeamsBulk(e){
   e.preventDefault();
@@ -268,12 +351,19 @@ function computeSettlement(observerId,start,end){
   const matches=data.matches.filter(m=>m.observer_id===observerId&&m.status==='finished'&&m.date>=start&&m.date<=end);
   const totals={total_collected:0,total_paid_referees:0,total_cards_collected:0,total_observer:0,total_silbatazo:0,total_tournament:0,w_adjustment:0};
   matches.forEach(m=>{
+    // Fórmula unificada (igual para partido normal y por W): el árbitro
+    // (+asistentes), el veedor y Silbatazo siempre cobran completo; el
+    // torneo es quien absorbe el residual — se queda con lo que sobra del
+    // recaudo, o cubre el faltante (w_adjustment) cuando no alcanza.
     const collected=m.isWalkover?m.teamFee:m.teamFee*2;
+    const required=m.refPay+m.observerFee+m.silbatazoFee;
+    const residual=collected-required;
     totals.total_collected+=collected;
     totals.total_paid_referees+=m.refPay;
     totals.total_observer+=m.observerFee;
-    if(m.isWalkover){totals.w_adjustment+=m.silbatazoFee+m.tournamentFee}
-    else{totals.total_silbatazo+=m.silbatazoFee;totals.total_tournament+=m.tournamentFee}
+    totals.total_silbatazo+=m.silbatazoFee;
+    if(residual>=0)totals.total_tournament+=residual;
+    else totals.w_adjustment+=-residual;
     raw.cards.filter(c=>c.match_id===m.id&&c.paid).forEach(c=>{totals.total_cards_collected+=Number(c.fee)||0;totals.total_silbatazo+=Number(c.silbatazo_fee)||0;totals.total_tournament+=Number(c.tournament_fee)||0});
   });
   return {matches,totals};
@@ -320,11 +410,141 @@ async function closeSettlement(observerId,start,end,totals,matches){
   toastMsg('Liquidación cerrada.');current='settlements';await loadAll();render();
 }
 
+function normalizeName(s){return String(s||'').trim().toLowerCase()}
+function toISODate(v){if(v instanceof Date)return v.toISOString().slice(0,10);const s=String(v||'').trim();const m=s.match(/^(\d{4}-\d{2}-\d{2})/);return m?m[1]:s}
+function toHHMM(v){if(v instanceof Date)return v.toTimeString().slice(0,5);const s=String(v||'').trim();const m=s.match(/^(\d{1,2}):(\d{2})/);return m?m[1].padStart(2,'0')+':'+m[2]:s}
+
+function importPartidosView(){
+  const options=data.tournaments.filter(t=>t.categories.length).map(t=>`<option value="${t.id}">${esc(t.name)}</option>`).join('');
+  return `<section class="intro"><div><button class="link-btn" onclick="current='matches';render()">← Partidos</button><span class="eyebrow" style="display:block;margin-top:16px">Carga masiva</span><h2>Importar partidos</h2><p>Sube un Excel (.xlsx) con la programación de un torneo ya configurado.</p></div></section>
+  <div class="box"><div class="form"><div class="form-grid">
+    <div class="field full"><label for="importTournament">Torneo</label><select id="importTournament">${options||'<option value="">Configura un torneo con categorías primero</option>'}</select></div>
+    <div class="field full"><label for="importFile">Archivo .xlsx</label><input type="file" id="importFile" accept=".xlsx,.xls"></div>
+    <p style="grid-column:1/-1;color:#8b929b;margin:0">Columnas esperadas: fecha, hora, cancha, categoria, equipo_local, equipo_visitante, tipo_servicio (opcional), arbitro_central (opcional), asistente_1 (opcional), asistente_2 (opcional), veedor (opcional), notas (opcional).</p>
+  </div></div></div>
+  <div id="importPreview"></div>`;
+}
+
+async function handleImportFile(e){
+  const file=e.target.files[0];
+  if(!file)return;
+  const t=data.tournaments.find(x=>x.id===importTournament.value);
+  if(!t){toastMsg('Elige un torneo primero.');importFile.value='';return}
+  const buf=await file.arrayBuffer();
+  const wb=XLSX.read(buf,{type:'array'});
+  const ws=wb.Sheets[wb.SheetNames[0]];
+  const rows=XLSX.utils.sheet_to_json(ws,{defval:''});
+  if(!rows.length){toastMsg('El archivo no tiene filas.');return}
+  renderImportPreview(t,rows);
+}
+
+let importRows=[];
+function resolveImportRow(t,row){
+  const issues=[];
+  const categoryName=String(row.categoria||'').trim();
+  const cat=t.categories.find(c=>normalizeName(c.name)===normalizeName(categoryName));
+  if(!cat)issues.push({level:'error',msg:`Categoría no encontrada: "${categoryName}"`});
+
+  const localName=String(row.equipo_local||'').trim(),visitorName=String(row.equipo_visitante||'').trim();
+  const localTeam=t.teams.find(tm=>normalizeName(tm.name)===normalizeName(localName));
+  const visitorTeam=t.teams.find(tm=>normalizeName(tm.name)===normalizeName(visitorName));
+  if(!localTeam)issues.push({level:'error',msg:`Equipo local no encontrado: "${localName}"`});
+  if(!visitorTeam)issues.push({level:'error',msg:`Equipo visitante no encontrado: "${visitorName}"`});
+
+  const courtName=String(row.cancha||'').trim();
+  const court=data.courts.find(c=>normalizeName(c.name)===normalizeName(courtName));
+  if(!courtName)issues.push({level:'error',msg:'Falta la cancha'});
+
+  const refName=String(row.arbitro_central||'').trim();
+  const referee=refName?data.referees.find(r=>normalizeName(r.name)===normalizeName(refName)):null;
+  if(refName&&!referee)issues.push({level:'warning',msg:`Árbitro no encontrado: "${refName}" (se importa sin asignar)`});
+
+  const a1Name=String(row.asistente_1||'').trim();
+  const assistant1=a1Name?data.referees.find(r=>normalizeName(r.name)===normalizeName(a1Name)):null;
+  if(a1Name&&!assistant1)issues.push({level:'warning',msg:`Asistente 1 no encontrado: "${a1Name}"`});
+
+  const a2Name=String(row.asistente_2||'').trim();
+  const assistant2=a2Name?data.referees.find(r=>normalizeName(r.name)===normalizeName(a2Name)):null;
+  if(a2Name&&!assistant2)issues.push({level:'warning',msg:`Asistente 2 no encontrado: "${a2Name}"`});
+
+  const veedorName=String(row.veedor||'').trim();
+  const observer=veedorName?data.observers.find(o=>normalizeName(o.name)===normalizeName(veedorName)):null;
+  if(veedorName&&!observer)issues.push({level:'warning',msg:`Veedor no encontrado: "${veedorName}" (se importa sin asignar)`});
+
+  if(!row.fecha)issues.push({level:'error',msg:'Falta la fecha'});
+  if(!row.hora)issues.push({level:'error',msg:'Falta la hora'});
+
+  const serviceType=normalizeName(row.tipo_servicio)==='solo_arbitraje'?'solo_arbitraje':'completo';
+  const rate=cat?getRate(cat.id,court?court.id:null):null;
+
+  return {row,cat,localTeam,visitorTeam,courtName,court,referee,assistant1,assistant2,observer,serviceType,rate,issues,hasError:issues.some(i=>i.level==='error')};
+}
+
+function renderImportPreview(t,rawRows){
+  importRows=rawRows.map(row=>resolveImportRow(t,row));
+  const ok=importRows.filter(r=>!r.hasError).length;
+  const errCount=importRows.filter(r=>r.hasError).length;
+  const warnCount=importRows.filter(r=>!r.hasError&&r.issues.length).length;
+  importPreview.innerHTML=`<div class="box"><div class="box-head"><h3>Vista previa — ${importRows.length} fila(s)</h3></div>
+    <p style="padding:0 20px;color:#66707b">${ok} lista(s) para importar${warnCount?`, ${warnCount} con advertencia`:''}${errCount?`, ${errCount} con error (no se importan)`:''}.</p>
+    <div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Hora</th><th>Cancha</th><th>Categoría</th><th>Local</th><th>Visitante</th><th>Árbitro</th><th>Veedor</th><th>Estado</th></tr></thead><tbody>
+    ${importRows.map(r=>`<tr style="background:${r.hasError?'#ffe0df':(r.issues.length?'#fff8e6':'')}">
+      <td>${esc(toISODate(r.row.fecha))}</td><td>${esc(toHHMM(r.row.hora))}</td>
+      <td>${esc(r.row.cancha||'')}${!r.court&&r.courtName?' (nueva)':''}</td>
+      <td>${esc(r.row.categoria||'')}</td><td>${esc(r.row.equipo_local||'')}</td><td>${esc(r.row.equipo_visitante||'')}</td>
+      <td>${esc(r.row.arbitro_central||'')}</td><td>${esc(r.row.veedor||'')}</td>
+      <td>${r.issues.map(i=>esc(i.msg)).join('; ')||'OK'}</td>
+    </tr>`).join('')}
+    </tbody></table></div></div>
+    <div class="actions"><button class="save" id="confirmImportBtn" ${ok?'':'disabled'}>Importar ${ok} partido(s) válido(s)</button></div>`;
+  if(ok)confirmImportBtn.onclick=()=>runImport(t);
+}
+
+async function runImport(t){
+  const btn=confirmImportBtn;btn.disabled=true;btn.textContent='Importando…';
+  let created=0,failed=0;
+  for(const r of importRows){
+    if(r.hasError)continue;
+    let courtId=r.court?r.court.id:null;
+    if(!courtId&&r.courtName){
+      const {data:newCourt,error:courtErr}=await sb.from('courts').insert({name:r.courtName}).select().single();
+      if(!courtErr&&newCourt){courtId=newCourt.id;data.courts.push(newCourt)}
+    }
+    const rate=getRate(r.cat.id,courtId);
+    const isSolo=r.serviceType==='solo_arbitraje';
+    const snap=computeMoneySnapshot(rate,{isSolo});
+    const payload={
+      name:`${r.localTeam.name} vs ${r.visitorTeam.name}`,match_date:toISODate(r.row.fecha),match_time:toHHMM(r.row.hora),
+      place:r.courtName,match_type:'Torneo',status:'pending',
+      tournament_id:t.id,client_id:null,
+      service_value:snap.serviceValue,officials_total:snap.officialsTotal,
+      client_to_silbatazo:rate?rate.silbatazo_fee:0,client_to_officials:rate?rate.referee_fee:0,silbatazo_to_officials:0,
+      notes:r.row.notas||null,created_by:currentUser.id,
+      court_id:courtId,category_id:r.cat.id,
+      local_team_id:r.localTeam.id,visitor_team_id:r.visitorTeam.id,
+      service_type:r.serviceType,arbiter_is_observer:false,
+      team_fee:snap.teamFeeSnap,silbatazo_fee:snap.silbatazoFeeSnap,tournament_fee:snap.tournamentFeeSnap,
+    };
+    const {data:inserted,error}=await sb.from('matches').insert(payload).select().single();
+    if(error){failed++;continue}
+    const officials=[];
+    if(r.referee)officials.push({match_id:inserted.id,referee_id:r.referee.id,role:'central',agreed_value:rate?rate.referee_fee:0});
+    if(r.assistant1)officials.push({match_id:inserted.id,referee_id:r.assistant1.id,role:'assistant_1',agreed_value:rate?rate.assistant1_fee:0});
+    if(r.assistant2)officials.push({match_id:inserted.id,referee_id:r.assistant2.id,role:'assistant_2',agreed_value:rate?rate.assistant2_fee:0});
+    if(officials.length)await sb.from('match_officials').insert(officials);
+    if(r.observer&&!isSolo)await sb.from('match_observers').insert({match_id:inserted.id,observer_id:r.observer.id,agreed_value:snap.observerAgreedValue});
+    created++;
+  }
+  btn.disabled=false;btn.textContent='Importar';
+  toastMsg(`Se importaron ${created} partido(s).${failed?` ${failed} fallaron.`:''}`);
+  importRows=[];current='matches';await loadAll();render();
+}
+
 function nav(){const html=navItems.map(([id,icon,label])=>`<button data-view="${id}" class="${current===id?'active':''}"><i>${icon}</i>${label}</button>`).join('');desktopNav.innerHTML=html;mobileNav.innerHTML=navItems.map(([id,icon,label])=>`<button data-view="${id}" class="${current===id?'active':''}"><i>${icon}</i>${label}</button>`).join('');document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>{current=b.dataset.view;render()})}
 function matchRow(m){return `<div class="match"><div class="time">${m.time}<small>${(m.date||'').slice(5).replace('-','/')}</small></div><div><b>${esc(m.name)}</b><span class="meta">📍 ${esc(m.place)} · ⚖ ${esc(m.referee)}</span></div><span class="status ${m.status}">${statusLabel[m.status]}</span></div>`}
 function dashboard(){const matches=data.matches;const pending=matches.filter(m=>m.status==='pending').length;const total=matches.reduce((a,m)=>a+m.service,0);const refPay=matches.reduce((a,m)=>a+m.refPay,0);const paid=matches.reduce((a,m)=>a+m.toSilbatazo+m.toRef,0);return `<section class="intro"><div><span class="eyebrow">Control operativo</span><h2>Todo bajo control.</h2><p>Lo importante de Silbatazo, sin vueltas.</p></div></section><section class="cards"><div class="metric"><small>Partidos hoy</small><strong>${matches.filter(m=>m.date===todayISO()).length}</strong><span>Agenda del día</span></div><div class="metric" style="--accent:var(--yellow)"><small>Sin árbitro</small><strong>${pending}</strong><span>Requieren acción</span></div><div class="metric"><small>Total registrados</small><strong>${matches.length}</strong><span>${matches.filter(m=>m.status==='confirmed').length} confirmados</span></div><div class="metric" style="--accent:var(--yellow)"><small>Utilidad estimada</small><strong>${money(total-refPay)}</strong><span>Según partidos registrados</span></div></section><section class="grid"><div class="box"><div class="box-head"><h3>Próximos partidos</h3><button data-go="matches">Ver todos</button></div>${matches.slice().sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time)).slice(0,6).map(matchRow).join('')||'<div class="empty">Todavía no hay partidos registrados.</div>'}</div><div class="box money"><div class="box-head"><h3>Resumen financiero</h3></div><div class="money-list"><div class="money-row"><span>Servicios registrados</span><strong>${money(total)}</strong></div><div class="money-row"><span>Pagado por clientes</span><strong>${money(paid)}</strong></div><div class="money-row"><span>Pendiente por cobrar</span><strong>${money(total-paid)}</strong></div><div class="money-row"><span>Pago acordado árbitros</span><strong>${money(refPay)}</strong></div></div><p class="alert">La utilidad se calcula por partido. No se presupone un porcentaje fijo.</p></div></section>`}
-function matchesView(){return `<section class="intro"><div><span class="eyebrow">Operación</span><h2>Partidos</h2><p>Agenda, asignaciones y dinero en un solo lugar.</p></div></section><div class="toolbar"><input class="search" id="matchSearch" placeholder="Buscar partido, cliente o árbitro…"><select class="filter" id="statusFilter"><option value="">Todos los estados</option><option value="pending">Pendiente</option><option value="confirmed">Confirmado</option><option value="finished">Finalizado</option><option value="cancelled">Cancelado</option></select></div><div class="match-list" id="matchTable">${matchCards(data.matches)}</div>`}
-function matchCards(list){return list.map(m=>`<div class="mcard"><div class="time">${m.time}<small>${(m.date||'').slice(5).replace('-','/')}</small></div><div class="who"><b>${esc(m.name)}</b><span class="meta">📍 ${esc(m.court||m.place)} · ⚖ ${esc(m.referee)} · ${esc(m.category||m.client)}${m.isWalkover?' · ⚠ Por W':''}${m.pendingCards?' · ⚠ '+m.pendingCards+' tarjeta(s) pendiente(s)':''}</span></div><div class="money-mini"><b>${money(m.service-m.refPay)}</b><small>utilidad</small></div><span class="status ${m.status}">${statusLabel[m.status]}</span>${m.local_team_id&&m.visitor_team_id&&!m.isWalkover?`<button class="link-btn" onclick="markWalkover('${m.id}')">Por W</button>`:''}</div>`).join('')||`<div class="empty">No encontramos partidos.</div>`}
+function matchesView(){return `<section class="intro"><div><span class="eyebrow">Operación</span><h2>Partidos</h2><p>Agenda, asignaciones y dinero en un solo lugar.</p></div><button class="ghost" onclick="current='import';render()">⇪ Importar Excel</button></section><div class="toolbar"><input class="search" id="matchSearch" placeholder="Buscar partido, cliente o árbitro…"><select class="filter" id="statusFilter"><option value="">Todos los estados</option><option value="pending">Pendiente</option><option value="confirmed">Confirmado</option><option value="finished">Finalizado</option><option value="cancelled">Cancelado</option></select></div><div class="match-list" id="matchTable">${matchCards(data.matches)}</div>`}
+function matchCards(list){return list.map(m=>`<div class="mcard"><div class="time">${m.time}<small>${(m.date||'').slice(5).replace('-','/')}</small></div><div class="who"><b>${esc(m.name)}</b><span class="meta">📍 ${esc(m.court||m.place)} · ⚖ ${esc(m.referee)} · ${esc(m.category||m.client)}${m.isWalkover?' · ⚠ Por W':''}${m.pendingCards?' · ⚠ '+m.pendingCards+' tarjeta(s) pendiente(s)':''}</span></div><div class="money-mini"><b>${money(m.service-m.refPay)}</b><small>utilidad</small></div><span class="status ${m.status}">${statusLabel[m.status]}</span><button class="link-btn" onclick="editMatch('${m.id}')">Editar</button>${m.local_team_id&&m.visitor_team_id&&!m.isWalkover?`<button class="link-btn" onclick="markWalkover('${m.id}')">Por W</button>`:''}</div>`).join('')||`<div class="empty">No encontramos partidos.</div>`}
 async function markWalkover(id){
   const m=data.matches.find(x=>x.id===id);
   if(!m)return;
@@ -348,26 +568,32 @@ function observersView(){
 }
 async function markCardPaid(id){const {error}=await sb.from('cards').update({paid:true,paid_at:new Date().toISOString()}).eq('id',id);if(error){toastMsg('No se pudo marcar el pago.');return}toastMsg('Tarjeta marcada como pagada.');await loadAll();render()}
 function financeView(){const rows=data.matches.map(m=>{const utility=m.service-m.refPay,debt=Math.max(0,m.refPay-m.toRef-m.paidRef),clientDebt=Math.max(0,m.service-m.toSilbatazo-m.toRef);return {...m,utility,debt,clientDebt}});return `<section class="intro"><div><span class="eyebrow">Dinero por partido</span><h2>Finanzas</h2><p>Quién recibió cuánto, qué falta y qué quedó.</p></div></section><section class="cards"><div class="metric"><small>Servicios</small><strong>${money(rows.reduce((a,m)=>a+m.service,0))}</strong></div><div class="metric" style="--accent:var(--yellow)"><small>Por cobrar</small><strong>${money(rows.reduce((a,m)=>a+m.clientDebt,0))}</strong></div><div class="metric" style="--accent:var(--red)"><small>Debemos árbitros</small><strong>${money(rows.reduce((a,m)=>a+m.debt,0))}</strong></div><div class="metric"><small>Utilidad</small><strong>${money(rows.reduce((a,m)=>a+m.utility,0))}</strong></div></section><div class="match-list">${rows.map(m=>`<div class="mcard"><div class="who"><b>${esc(m.name)}</b><span class="meta">${m.date} · servicio ${money(m.service)}</span></div><div class="money-mini"><b>${money(m.utility)}</b><small>utilidad</small></div><div class="money-mini"><b>${money(m.debt)}</b><small>debemos árbitro</small></div></div>`).join('')||'<div class="empty">No hay partidos registrados.</div>'}</div>`}
-function render(){nav();pageTitle.textContent=navItems.find(x=>x[0]===current)[2];content.innerHTML=current==='home'?dashboard():current==='matches'?matchesView():current==='tournaments'?tournamentsView():current==='courts'?courtsView():current==='clients'?clientsView():current==='referees'?refereesView():current==='observers'?observersView():current==='settlements'?settlementsView():financeView();document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>{current=b.dataset.go;render()});if(current==='matches'){const filter=()=>{const q=matchSearch.value.toLowerCase(),s=statusFilter.value;matchTable.innerHTML=matchCards(data.matches.filter(m=>(!s||m.status===s)&&JSON.stringify(m).toLowerCase().includes(q)))};matchSearch.oninput=filter;statusFilter.onchange=filter}}
+function render(){nav();pageTitle.textContent=current==='import'?'Importar partidos':navItems.find(x=>x[0]===current)[2];content.innerHTML=current==='home'?dashboard():current==='matches'?matchesView():current==='tournaments'?tournamentsView():current==='courts'?courtsView():current==='clients'?clientsView():current==='referees'?refereesView():current==='observers'?observersView():current==='settlements'?settlementsView():current==='import'?importPartidosView():financeView();document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>{current=b.dataset.go;render()});if(current==='matches'){const filter=()=>{const q=matchSearch.value.toLowerCase(),s=statusFilter.value;matchTable.innerHTML=matchCards(data.matches.filter(m=>(!s||m.status===s)&&JSON.stringify(m).toLowerCase().includes(q)))};matchSearch.oninput=filter;statusFilter.onchange=filter}if(current==='import'){importFile.onchange=handleImportFile}}
 
-let advTouched=false;
+let advTouched=false,editingMatchId=null,suppressAutofill=false;
 function openModal(){
   modal.classList.add('open');advTouched=false;advPanel.hidden=true;advToggle.textContent='Ajustar quién le paga a quién ↓';
+  editingMatchId=null;suppressAutofill=false;
+  document.querySelector('#modal .dialog-head h2').textContent='Nuevo partido';
+  matchForm.querySelector('.save').textContent='Guardar partido';
   document.getElementById('date').value=new Date().toISOString().slice(0,10);
   document.getElementById('client').innerHTML=data.clients.length?data.clients.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join(''):'<option value="">Sin clientes — agrega uno primero</option>';
   document.getElementById('referee').innerHTML='<option value="">Sin asignar</option>'+data.referees.map(r=>`<option value="${r.id}">${esc(r.name)}</option>`).join('');
+  document.getElementById('assistant1').innerHTML='<option value="">Sin asignar</option>'+data.referees.map(r=>`<option value="${r.id}">${esc(r.name)}</option>`).join('');
+  document.getElementById('assistant2').innerHTML='<option value="">Sin asignar</option>'+data.referees.map(r=>`<option value="${r.id}">${esc(r.name)}</option>`).join('');
   document.getElementById('tournament').innerHTML='<option value="">Partido independiente</option>'+data.tournaments.map(t=>`<option value="${t.id}">${esc(t.name)}</option>`).join('');
   document.getElementById('observer').innerHTML='<option value="">Sin asignar</option>'+data.observers.map(o=>`<option value="${o.id}">${esc(o.name)}</option>`).join('');
   courtsList.innerHTML=data.courts.map(c=>`<option value="${esc(c.name)}">`).join('');
   category.innerHTML='';categoryField.hidden=true;
   localTeam.innerHTML='';visitorTeam.innerHTML='';localTeamField.hidden=true;visitorTeamField.hidden=true;
+  assistant1Field.hidden=true;assistant2Field.hidden=true;
   soloArbitraje.checked=false;arbiterIsObserver.checked=false;arbiterIsObserverField.hidden=true;
   observerFieldsToggle();
   calcMoney();
 }
 function hideModal(){modal.classList.remove('open')}
 newMatch.onclick=openModal;closeModalBtn.onclick=cancelModal.onclick=hideModal;modal.onclick=e=>{if(e.target===modal)hideModal()};
-tournament.onchange=onTournamentChange;category.onchange=onCategoryChange;
+tournament.onchange=onTournamentChange;category.onchange=onCategoryChange;place.oninput=onCategoryChange;
 soloArbitraje.onchange=observerFieldsToggle;arbiterIsObserver.onchange=observerFieldsToggle;
 function observerFieldsToggle(){const hide=soloArbitraje.checked||arbiterIsObserver.checked;document.getElementById('observer').closest('.field').hidden=hide;document.getElementById('observerFee').closest('.field').hidden=hide}
 function onTournamentChange(){
@@ -379,11 +605,45 @@ function onTournamentChange(){
   arbiterIsObserverField.hidden=!(t&&t.categories.length);
   onCategoryChange();
 }
-function onCategoryChange(){
+function currentRate(){
   const t=data.tournaments.find(x=>x.id===tournament.value);
   const cat=t&&t.categories.find(c=>c.id===category.value);
-  const rate=cat&&cat.rate;
-  if(rate){service.value=rate.team_fee*2;refPay.value=rate.referee_fee;observerFee.value=rate.observer_fee;advTouched=false;toSilbatazo.value=rate.silbatazo_fee;toRef.value=rate.referee_fee;paidRef.value=0}
+  if(!cat)return null;
+  return getRate(cat.id,resolveCourtId(place.value));
+}
+function onCategoryChange(){
+  const rate=currentRate();
+  assistant1Field.hidden=!(rate&&rate.assistant1_fee>0);
+  assistant2Field.hidden=!(rate&&rate.assistant2_fee>0);
+  if(suppressAutofill)return;
+  if(rate){
+    service.value=rate.team_fee*2;
+    refPay.value=rate.referee_fee+(rate.assistant1_fee||0)+(rate.assistant2_fee||0);
+    observerFee.value=rate.observer_fee;advTouched=false;toSilbatazo.value=rate.silbatazo_fee;toRef.value=rate.referee_fee;paidRef.value=0;
+  }
+  calcMoney();
+}
+function editMatch(id){
+  const m=data.matches.find(x=>x.id===id);
+  if(!m)return;
+  openModal();
+  editingMatchId=id;suppressAutofill=true;
+  document.querySelector('#modal .dialog-head h2').textContent='Editar partido';
+  matchForm.querySelector('.save').textContent='Guardar cambios';
+  date.value=m.date;time.value=m.time;place.value=m.place||'';document.getElementById('name').value=m.name;
+  client.value=m.client_id||'';document.getElementById('type').value=m.type||'Amistoso';document.getElementById('status').value=m.status;
+  tournament.value=m.tournament_id||'';onTournamentChange();
+  category.value=m.category_id||'';
+  localTeam.value=m.local_team_id||'';visitorTeam.value=m.visitor_team_id||'';
+  referee.value=m.referee_id||'';assistant1.value=m.assistant1_id||'';assistant2.value=m.assistant2_id||'';
+  onCategoryChange(); // solo actualiza visibilidad de asistentes (suppressAutofill sigue activo)
+  soloArbitraje.checked=m.serviceType==='solo_arbitraje';arbiterIsObserver.checked=m.arbiterIsObserver;
+  observerFieldsToggle();
+  observer.value=m.observer_id||'';observerFee.value=m.observerFee||0;
+  service.value=m.service;refPay.value=m.refPay;
+  toSilbatazo.value=m.toSilbatazo;toRef.value=m.toRef;paidRef.value=m.paidRef;
+  advTouched=true;notes.value=m.notes||'';
+  suppressAutofill=false;
   calcMoney();
 }
 document.addEventListener('keydown',e=>{if(e.key==='Escape')[modal,clientModal,refereeModal,tournamentModal,veedorModal,courtModal].forEach(m=>m.classList.remove('open'))});
@@ -395,6 +655,7 @@ matchForm.onsubmit=async e=>{
   e.preventDefault();
   const f=Object.fromEntries(new FormData(matchForm));
   const saveBtn=matchForm.querySelector('.save');saveBtn.disabled=true;saveBtn.textContent='Guardando…';
+  const isEdit=!!editingMatchId;
 
   const placeName=f.place.trim();
   let courtId=null;
@@ -407,41 +668,53 @@ matchForm.onsubmit=async e=>{
   const tour=data.tournaments.find(x=>x.id===f.tournament);
   const categoryId=category.value||null;
   const cat=categoryId&&tour?tour.categories.find(c=>c.id===categoryId):null;
-  const rate=cat&&cat.rate;
+  const rate=cat?getRate(cat.id,courtId):null;
   const isSolo=soloArbitraje.checked,isArbObserver=arbiterIsObserver.checked;
-
-  let teamFeeSnap=0,silbatazoFeeSnap=0,tournamentFeeSnap=0,serviceValue=+f.service||0,officialsTotal=+f.refPay||0,matchName=f.name,observerAgreedValue=+f.observerFee||0;
-  if(rate){
-    teamFeeSnap=rate.team_fee;officialsTotal=rate.referee_fee;serviceValue=rate.team_fee*2;observerAgreedValue=rate.observer_fee;
-    if(isSolo){silbatazoFeeSnap=Math.max(0,serviceValue-officialsTotal);tournamentFeeSnap=0}
-    else if(isArbObserver){
-      const silPct=(tour.arbiter_observer_split_silbatazo_pct??50)/100,torPct=(tour.arbiter_observer_split_tournament_pct??50)/100;
-      silbatazoFeeSnap=rate.silbatazo_fee+Math.round(rate.observer_fee*silPct);tournamentFeeSnap=rate.tournament_fee+Math.round(rate.observer_fee*torPct);
-    } else {silbatazoFeeSnap=rate.silbatazo_fee;tournamentFeeSnap=rate.tournament_fee}
-    if(localTeam.value&&visitorTeam.value){
-      const lt=data.teams.find(t=>t.id===localTeam.value),vt=data.teams.find(t=>t.id===visitorTeam.value);
-      if(lt&&vt)matchName=`${lt.name} vs ${vt.name}`;
-    }
+  let matchName=f.name;
+  if(rate&&localTeam.value&&visitorTeam.value){
+    const lt=data.teams.find(t=>t.id===localTeam.value),vt=data.teams.find(t=>t.id===visitorTeam.value);
+    if(lt&&vt)matchName=`${lt.name} vs ${vt.name}`;
   }
+  const snap=computeMoneySnapshot(rate,{isSolo,isArbObserver,tour});
+  const serviceValue=rate?snap.serviceValue:(+f.service||0);
+  const officialsTotal=rate?snap.officialsTotal:(+f.refPay||0);
 
   const payload={
     name:matchName,match_date:f.date,match_time:f.time,place:placeName,match_type:f.type,status:f.status,
     client_id:f.client||null,tournament_id:f.tournament||null,
     service_value:serviceValue,officials_total:officialsTotal,
     client_to_silbatazo:+f.toSilbatazo||0,client_to_officials:+f.toRef||0,silbatazo_to_officials:+f.paidRef||0,
-    notes:f.notes||null,created_by:currentUser.id,
+    notes:f.notes||null,
     court_id:courtId,category_id:categoryId,
     local_team_id:localTeam.value||null,visitor_team_id:visitorTeam.value||null,
     service_type:isSolo?'solo_arbitraje':'completo',arbiter_is_observer:isArbObserver,
-    team_fee:teamFeeSnap,silbatazo_fee:silbatazoFeeSnap,tournament_fee:tournamentFeeSnap,
+    team_fee:snap.teamFeeSnap,silbatazo_fee:snap.silbatazoFeeSnap,tournament_fee:snap.tournamentFeeSnap,
   };
-  const {data:inserted,error}=await sb.from('matches').insert(payload).select().single();
-  if(error){toastMsg('No se pudo guardar el partido.');saveBtn.disabled=false;saveBtn.textContent='Guardar partido';return}
-  const matchId=inserted.id;
-  if(f.referee){await sb.from('match_officials').insert({match_id:matchId,referee_id:f.referee,role:'central',agreed_value:officialsTotal})}
-  if(f.observer&&!isArbObserver&&!isSolo){await sb.from('match_observers').insert({match_id:matchId,observer_id:f.observer,agreed_value:observerAgreedValue})}
-  saveBtn.disabled=false;saveBtn.textContent='Guardar partido';
-  hideModal();matchForm.reset();toastMsg('Partido guardado correctamente');current='matches';
+
+  let matchId;
+  if(isEdit){
+    matchId=editingMatchId;
+    const {error}=await sb.from('matches').update(payload).eq('id',matchId);
+    if(error){toastMsg('No se pudo guardar los cambios.');saveBtn.disabled=false;saveBtn.textContent='Guardar cambios';return}
+    await sb.from('match_officials').delete().eq('match_id',matchId);
+    await sb.from('match_observers').delete().eq('match_id',matchId);
+  } else {
+    payload.created_by=currentUser.id;
+    const {data:inserted,error}=await sb.from('matches').insert(payload).select().single();
+    if(error){toastMsg('No se pudo guardar el partido.');saveBtn.disabled=false;saveBtn.textContent='Guardar partido';return}
+    matchId=inserted.id;
+  }
+
+  const officials=[];
+  if(f.referee)officials.push({match_id:matchId,referee_id:f.referee,role:'central',agreed_value:rate?rate.referee_fee:officialsTotal});
+  if(assistant1.value)officials.push({match_id:matchId,referee_id:assistant1.value,role:'assistant_1',agreed_value:rate?rate.assistant1_fee:0});
+  if(assistant2.value)officials.push({match_id:matchId,referee_id:assistant2.value,role:'assistant_2',agreed_value:rate?rate.assistant2_fee:0});
+  if(officials.length)await sb.from('match_officials').insert(officials);
+  if(f.observer&&!isArbObserver&&!isSolo){await sb.from('match_observers').insert({match_id:matchId,observer_id:f.observer,agreed_value:rate?snap.observerAgreedValue:(+f.observerFee||0)})}
+
+  saveBtn.disabled=false;saveBtn.textContent=isEdit?'Guardar cambios':'Guardar partido';
+  hideModal();matchForm.reset();toastMsg(isEdit?'Partido actualizado.':'Partido guardado correctamente');
+  editingMatchId=null;current='matches';
   await loadAll();render();
 };
 
