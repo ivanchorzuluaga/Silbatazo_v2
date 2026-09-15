@@ -4,7 +4,7 @@
 Sitio público (landing) + panel de administración + portal de veedores para Silbatazo, empresa colombiana de arbitraje de fútbol. Gestiona clientes, torneos (con categorías y tarifas), partidos, árbitros, veedores, tarjetas amarillas/rojas y liquidaciones financieras semanales.
 
 ## Stack tecnológico (real, en producción)
-- **Frontend**: HTML + JS plano (`admin.html`, `veedor.html`, `silbatazo_landing_disruptiva.html`). **Sin paso de build** — no hay `package.json`, no hay Next.js, no hay npm en este repo.
+- **Frontend**: HTML + JS plano (`admin.html`, `veedor.html`, `index.html` — la landing, servida en la raíz `silbatazo.com/`). **Sin paso de build** — no hay `package.json`, no hay Next.js, no hay npm en este repo.
 - **Base de datos**: Supabase (PostgreSQL) con Auth. Los 4 admins tienen cuenta de Supabase Auth (rol `admin` en `profiles`). Los veedores **también** entran con correo/contraseña de Supabase Auth (rol `veedor`) — no hay acceso por link/token.
 - **Cliente Supabase compartido**: `assets/js/supa.js` (`window.SilbatazoAuth`) — pide la config pública a `/api/config` (no hay `VITE_`/`NEXT_PUBLIC_` porque no hay build step) y expone `requireRole('admin'|'veedor', opts)`.
 - **Backend serverless**: funciones en `/api/*.js` sobre Vercel (`create-veedor.js` usa `service_role` para crear el usuario del veedor; `gallery.js`/`testimonios.js`/`media.js` leen Google Drive de solo lectura para la landing).
@@ -75,7 +75,7 @@ Las arma el admin desde `admin.html` → Liquidaciones: elige veedor + rango de 
 COP, enteros, sin decimales. Mostrar con formato `$40.000` (ya lo hace el helper `money()` en ambos HTML).
 
 ## Convenciones de código
-- Todo vive en `admin.html`/`veedor.html`/`silbatazo_landing_disruptiva.html` + `/api/*.js` + `assets/js/supa.js` — no hay carpetas `/app`, `/components`, `/lib` de Next.js.
+- Todo vive en `admin.html`/`veedor.html`/`index.html` (landing) + `/api/*.js` + `assets/js/supa.js` — no hay carpetas `/app`, `/components`, `/lib` de Next.js.
 - Nombres de tabla y columna en `snake_case`, **en inglés** (coinciden con el esquema real en `supabase/*.sql`), aunque el negocio y las conversaciones sean en español.
 - Cambios de esquema: agregar un archivo `supabase/00N_descripcion.sql` nuevo (migración incremental) y también reflejarlo al final de `supabase/schema.sql` para que una instalación nueva quede completa en un solo archivo — así se hizo con `002` y `003`. El usuario pega el SQL a mano en el SQL Editor de Supabase (no hay Supabase CLI enlazado).
 

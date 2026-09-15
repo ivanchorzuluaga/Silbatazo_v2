@@ -4,7 +4,7 @@ Landing page de Silbatazo orientada a reservas por WhatsApp para servicios de ar
 
 ## Ver la página
 
-Abre `silbatazo_landing_disruptiva.html` en cualquier navegador moderno.
+Abre `index.html` en cualquier navegador moderno (en producción, es lo que sirve `silbatazo.com/`).
 
 El prototipo administrativo se encuentra en `admin.html`. Funciona directamente en el navegador y conserva los datos de prueba creados en el dispositivo mediante almacenamiento local.
 
