@@ -2,11 +2,13 @@
 
 Landing page de Silbatazo orientada a reservas por WhatsApp para servicios de arbitraje en Medellín y el Área Metropolitana.
 
+Este repositorio es **solo la landing pública** (`index.html`, en producción `silbatazo.com`). El panel administrativo vive aparte, en `administracion.silbatazo.com` (proyecto Next.js + Supabase distinto).
+
 ## Ver la página
 
-Abre `index.html` en cualquier navegador moderno (en producción, es lo que sirve `silbatazo.com/`).
+Abre `index.html` en cualquier navegador moderno.
 
-El prototipo administrativo se encuentra en `admin.html`. Funciona directamente en el navegador y conserva los datos de prueba creados en el dispositivo mediante almacenamiento local.
+Las secciones de Galería y Testimonios se llenan solas leyendo Google Drive a través de `/api/gallery`, `/api/testimonios` y `/api/media` (ver `PRODUCTION.md`).
 
 ## Identidad visual
 
@@ -20,8 +22,4 @@ Paleta corporativa:
 
 ## Logos
 
-Los archivos de marca se guardarán en `assets/logos/`. Se recomienda incluir:
-
-- Logo principal horizontal, preferiblemente SVG o PNG transparente.
-- Isotipo o versión compacta para favicon y pantallas pequeñas.
-- Versión clara para fondos oscuros, si existe.
+Los archivos de marca están en `assets/logos/`.
